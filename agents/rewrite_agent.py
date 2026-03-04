@@ -26,6 +26,7 @@ import re
 from dataclasses import dataclass
 
 import anthropic
+from anthropic.types import TextBlock
 from loguru import logger
 
 from agents.query_analyzer_agent import QueryDiagnosis
@@ -134,7 +135,8 @@ class RewriteAgent:
             system=REWRITE_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = resp.content[0].text
+        first_block = resp.content[0]
+        text = first_block.text if isinstance(first_block, TextBlock) else ""
 
         rewritten = self._extract_sql(text) or query
         applied = rewritten.strip() != query.strip()

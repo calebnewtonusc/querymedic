@@ -537,8 +537,8 @@ class GitHubDBPRHarvester:
                 relevance_score=score,
             )
 
-            async with aiofiles.open(str(output_file), "a") as f:
-                await f.write(json.dumps(asdict(pr_record)) + "\n")
+            async with aiofiles.open(str(output_file), "a") as out_f:
+                await out_f.write(json.dumps(asdict(pr_record)) + "\n")
 
             self._stats["saved"] += 1
             return True
@@ -640,7 +640,7 @@ if __name__ == "__main__":
     if not args.all:
         import sys
 
-        sys.modules[__name__].SEARCH_QUERIES = active_queries
+        setattr(sys.modules[__name__], "SEARCH_QUERIES", active_queries)
 
     n = asyncio.run(harvester.harvest_all(limit_per_group=args.limit))
     print(f"\nTotal DB optimization PRs harvested: {n:,}")

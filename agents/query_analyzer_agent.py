@@ -17,6 +17,7 @@ import os
 from dataclasses import dataclass
 
 import anthropic
+from anthropic.types import TextBlock
 from loguru import logger
 
 from synthesis.explain_plan_parser import ExplainPlanParser, ExplainPlan
@@ -83,7 +84,8 @@ class QueryAnalyzerAgent:
             system=ANALYSIS_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = resp.content[0].text
+        first_block = resp.content[0]
+        text = first_block.text if isinstance(first_block, TextBlock) else ""
 
         return QueryDiagnosis(
             bottleneck_type=plan.bottleneck_type,

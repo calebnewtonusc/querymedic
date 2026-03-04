@@ -122,9 +122,9 @@ def interpret_mysql_explain(explain_output: str) -> dict:
     recommendations = []
 
     for row in rows:
-        access = row["type"]
-        table = row["table"]
-        extra = row["extra"]
+        access = str(row["type"])
+        table = str(row["table"])
+        extra = str(row["extra"])
         row_count = row["rows"]
 
         if access == "ALL":

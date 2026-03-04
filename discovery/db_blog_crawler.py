@@ -242,7 +242,7 @@ class DBBlogCrawler:
                 if url in source.index_urls:
                     domain = urlparse(source.base_url).netloc
                     for a in soup.find_all("a", href=True):
-                        href = urljoin(source.base_url, a["href"])
+                        href = urljoin(source.base_url, str(a["href"]))
                         parsed = urlparse(href)
                         if (
                             parsed.netloc == domain

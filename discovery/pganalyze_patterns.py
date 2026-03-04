@@ -29,7 +29,14 @@ import json
 import re
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
+
+
+class BlogSourceConfig(TypedDict):
+    name: str
+    base_url: str
+    blog_url: str
+    link_pattern: re.Pattern[str]
 
 import aiofiles
 import aiohttp
@@ -45,7 +52,7 @@ except ImportError:
 OUTPUT_DIR = Path(__file__).parents[1] / "data" / "raw" / "pg_patterns"
 
 # Blog sources with known PostgreSQL optimization content
-BLOG_SOURCES = {
+BLOG_SOURCES: dict[str, BlogSourceConfig] = {
     "pganalyze": {
         "name": "pganalyze Blog",
         "base_url": "https://pganalyze.com",
@@ -189,7 +196,7 @@ def extract_links(html: str, base_url: str, pattern: re.Pattern) -> list[str]:
     if BS4_AVAILABLE:
         soup = BeautifulSoup(html, "html.parser")
         for a in soup.find_all("a", href=True):
-            href = a["href"]
+            href = str(a["href"])
             if not href.startswith("http"):
                 href = base_url.rstrip("/") + "/" + href.lstrip("/")
             if pattern.search(href):

@@ -236,7 +236,7 @@ def _collect_all_nodes(root: PlanNodeAnalysis) -> list[PlanNodeAnalysis]:
         node = stack.pop()
         result.append(node)
         stack.extend(node.children)
-    result.sort(key=lambda n: n.actual_time_ms, reverse=True)
+    result.sort(key=lambda n: n.actual_total_ms, reverse=True)
     return result
 
 

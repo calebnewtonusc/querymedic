@@ -1,0 +1,4 @@
+[codespell]
+# BRIN is a legitimate PostgreSQL index type (Block Range INdex), not a typo.
+ignore-words-list = brin
+skip = *.pyc,*.json,*.lock,__pycache__,.git,*.yaml,*.yml,*/node_modules/*

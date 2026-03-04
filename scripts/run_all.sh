@@ -34,29 +34,29 @@ echo "  Synthesis complete"
 # ── Step 4: Stage 1 — SFT training ───────────────────────────
 echo "[4/6] Stage 1: SFT training..."
 deepspeed --num_gpus 18 training/train.py \
-    --deepspeed training/configs/deepspeed_zero3.json \
-    --data-dir "${DATA_DIR}" \
-    --output-dir "${CHECKPOINT_DIR}/sft"
+	--deepspeed training/configs/deepspeed_zero3.json \
+	--data-dir "${DATA_DIR}" \
+	--output-dir "${CHECKPOINT_DIR}/sft"
 
 echo "  SFT checkpoint: ${CHECKPOINT_DIR}/sft/final"
 
 # ── Step 5: Stage 2 — GRPO RL training ───────────────────────
 echo "[5/6] Stage 2: GRPO RL training..."
 deepspeed --num_gpus 14 training/train_rl.py \
-    --sft_checkpoint "${CHECKPOINT_DIR}/sft/final" \
-    --data_path "${DATA_DIR}/sft/rl_scenarios.jsonl" \
-    --output_dir "${CHECKPOINT_DIR}/rl" \
-    --run_name "${RUN_NAME}-rl"
+	--sft_checkpoint "${CHECKPOINT_DIR}/sft/final" \
+	--data_path "${DATA_DIR}/sft/rl_scenarios.jsonl" \
+	--output_dir "${CHECKPOINT_DIR}/rl" \
+	--run_name "${RUN_NAME}-rl"
 
 echo "  RL checkpoint: ${CHECKPOINT_DIR}/rl/final"
 
 # ── Step 6: Stage 3 — DPO training ───────────────────────────
 echo "[6/6] Stage 3: DPO training..."
 deepspeed --num_gpus 14 training/train_dpo.py \
-    --rl_checkpoint "${CHECKPOINT_DIR}/rl/final" \
-    --data_path "${DATA_DIR}/sft/dpo_pairs.jsonl" \
-    --output_dir "${CHECKPOINT_DIR}/dpo" \
-    --run_name "${RUN_NAME}-dpo"
+	--rl_checkpoint "${CHECKPOINT_DIR}/rl/final" \
+	--data_path "${DATA_DIR}/sft/dpo_pairs.jsonl" \
+	--output_dir "${CHECKPOINT_DIR}/dpo" \
+	--run_name "${RUN_NAME}-dpo"
 
 echo "  DPO checkpoint: ${CHECKPOINT_DIR}/dpo/final"
 
@@ -64,7 +64,7 @@ echo "  DPO checkpoint: ${CHECKPOINT_DIR}/dpo/final"
 echo ""
 echo "Running QueryBench evaluation..."
 python pipeline.py --eval \
-    --model "${CHECKPOINT_DIR}/dpo/final"
+	--model "${CHECKPOINT_DIR}/dpo/final"
 
 echo ""
 echo "QueryMedic pipeline complete."

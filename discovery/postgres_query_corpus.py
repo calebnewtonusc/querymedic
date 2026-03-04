@@ -515,8 +515,8 @@ class PgActivityCrawler:
         return total
 
 
-def stream_all_records(data_dir: Path = OUTPUT_DIR) -> Iterator[QueryRecord]:
-    """Iterate over all QueryRecord objects from the corpus directory."""
+def stream_all_records(data_dir: Path = OUTPUT_DIR) -> Iterator[dict]:
+    """Iterate over all raw record dicts from the corpus directory."""
     for jsonl_file in sorted(data_dir.rglob("*.jsonl")):
         with open(jsonl_file) as f:
             for line in f:

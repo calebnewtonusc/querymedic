@@ -36,7 +36,7 @@ import os
 import random
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 # QM-8: The try/except that set HAS_AIOFILES = False and then immediately
 # re-raised was dead code — the False branch was unreachable. Replace with a
@@ -49,6 +49,7 @@ except ImportError as exc:
     ) from exc
 import httpx
 from anthropic import AsyncAnthropic
+from anthropic.types import TextBlock
 from loguru import logger
 
 RAW_DIR = Path(__file__).parents[1] / "data" / "raw"
@@ -383,7 +384,8 @@ class ClaudeBackend:
                 system=QUERYMEDIC_SYSTEM,
                 messages=[{"role": "user", "content": user_prompt}],
             )
-            return msg.content[0].text if msg.content else None
+            first = msg.content[0] if msg.content else None
+            return first.text if isinstance(first, TextBlock) else None
         except Exception as e:
             logger.debug(f"Claude API error: {e}")
             return None
@@ -461,6 +463,7 @@ class QueryMedicSynthesizer:
         self._semaphore = asyncio.Semaphore(workers)
         self._stats = {"processed": 0, "saved": 0, "skipped": 0, "errors": 0}
 
+        self._llm: Union[VLLMBackend, ClaudeBackend]
         if backend == "vllm" and vllm_urls:
             self._llm = VLLMBackend(vllm_urls)
         else:
