@@ -1,0 +1,57 @@
+# QueryMedic SFT Training Config
+# Stage 1: Supervised Fine-Tuning on (EXPLAIN_ANALYZE, schema, slow_query) → (diagnosis, index_DDL, rewritten_query) pairs
+# Base: Qwen/Qwen2.5-7B-Coder-Instruct | LoRA r=64 | DeepSpeed ZeRO-3
+
+model:
+  name_or_path: "Qwen/Qwen2.5-7B-Coder-Instruct"
+  torch_dtype: "bfloat16"
+  attn_implementation: "flash_attention_2"
+  trust_remote_code: true
+
+lora:
+  r: 64
+  lora_alpha: 128
+  lora_dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+data:
+  train_path: "data/training/train.jsonl"
+  eval_path: "data/training/eval.jsonl"
+  max_seq_length: 8192
+  dataset_text_field: "text"
+
+training:
+  output_dir: "checkpoints/querymedic-sft-v1"
+  run_name: "querymedic-sft-v1"
+  num_train_epochs: 3
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 8
+  learning_rate: 2.0e-4
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  bf16: true
+  tf32: true
+  optim: "adamw_torch_fused"
+  dataloader_num_workers: 4
+  evaluation_strategy: "steps"
+  eval_steps: 200
+  save_strategy: "steps"
+  save_steps: 200
+  save_total_limit: 3
+  logging_steps: 10
+  report_to: "wandb"
+  deepspeed: "training/configs/deepspeed_zero3.json"
+
+wandb:
+  project: "querymedic-sft"

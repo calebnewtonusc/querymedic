@@ -1,0 +1,38 @@
+# ─── Data ─────────────────────────────────────────────────────────────────────
+data/
+checkpoints/
+logs/
+results/
+*.jsonl
+*.json
+!training/configs/*.json
+!*.config.json
+!web/**/*.json
+!vercel.json
+
+# ─── Secrets ──────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+secrets/
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# ─── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp

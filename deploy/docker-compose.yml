@@ -1,0 +1,118 @@
+version: "3.9"
+
+# QueryMedic production deployment
+# 2 vLLM inference replicas + 1 API gateway
+
+services:
+
+  # ── vLLM inference (primary) ───────────────────────────────
+  querymedic-inference-1:
+    image: vllm/vllm-openai:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0,1,2,3
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+    command: >
+      --model ${MODEL_PATH:-checkpoints/querymedic-dpo-v1/final}
+      --served-model-name querymedic
+      --tensor-parallel-size 4
+      --gpu-memory-utilization 0.90
+      --max-model-len 8192
+      --max-num-seqs 64
+      --enable-prefix-caching
+      --trust-remote-code
+      --host 0.0.0.0
+      --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${MODEL_PATH:-./checkpoints}:/models:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1", "2", "3"]
+              capabilities: [gpu]
+
+  # ── vLLM inference (secondary) ────────────────────────────
+  querymedic-inference-2:
+    image: vllm/vllm-openai:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=4,5,6,7
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+    command: >
+      --model ${MODEL_PATH:-checkpoints/querymedic-dpo-v1/final}
+      --served-model-name querymedic
+      --tensor-parallel-size 4
+      --gpu-memory-utilization 0.90
+      --max-model-len 8192
+      --max-num-seqs 64
+      --enable-prefix-caching
+      --trust-remote-code
+      --host 0.0.0.0
+      --port 8001
+    ports:
+      - "8001:8001"
+    volumes:
+      - ${MODEL_PATH:-./checkpoints}:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["4", "5", "6", "7"]
+              capabilities: [gpu]
+
+  # ── Load-balanced API gateway ─────────────────────────────
+  querymedic-api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      - VLLM_ENDPOINT_1=http://querymedic-inference-1:8000
+      - VLLM_ENDPOINT_2=http://querymedic-inference-2:8001
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - MIN_TIMING_IMPROVEMENT=${MIN_TIMING_IMPROVEMENT:-20}
+      - LOG_LEVEL=INFO
+    ports:
+      - "8080:8080"
+    depends_on:
+      querymedic-inference-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Redis (response cache) ────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # ── Prometheus metrics ────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+volumes:
+  redis_data:
+
+networks:
+  default:
+    driver: bridge

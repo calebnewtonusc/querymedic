@@ -1,0 +1,66 @@
+# QueryMedic RL Training Config
+# Stage 2: GRPO with EXPLAIN plan cost reduction as verifiable reward
+# Reward = 0.50 * timing_reward + 0.25 * index_type_reward + 0.15 * write_amplification_reward + 0.10 * rewrite_reward
+
+model:
+  name_or_path: "Qwen/Qwen2.5-7B-Coder-Instruct"
+  sft_checkpoint: "checkpoints/querymedic-sft-v1"
+  torch_dtype: "bfloat16"
+  attn_implementation: "flash_attention_2"
+  trust_remote_code: true
+
+lora:
+  r: 64
+  lora_alpha: 128
+  lora_dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+data:
+  train_path: "data/rl/query_tasks.jsonl"
+  max_seq_length: 4096
+
+grpo:
+  num_generations: 8          # Sample 8 index/rewrite candidates per query
+  temperature: 0.7
+  top_p: 0.95
+  kl_coeff: 0.05
+
+reward_weights:
+  timing_reward: 0.50         # actual_rows / estimated_rows ratio improvement
+  index_type_reward: 0.25     # Correct index type for the query pattern (GIN for JSONB, etc.)
+  write_amplification_reward: 0.15  # Lower write_cost_factor = higher reward
+  rewrite_reward: 0.10        # Query rewrite removes anti-pattern (NOT IN → NOT EXISTS, etc.)
+
+postgres:
+  # Weights for reward component computation
+  # timing_reward: clamp(before_cost / after_cost, 0, 4) / 4
+  # index_type_reward: 1.0 if recommended IndexType matches PlannerKnowledge.recommend_index_type()
+  # write_amplification_reward: max(0, 1 - (write_cost_factor - 1) / 2)
+  # rewrite_reward: 1.0 if any ANTIPATTERNS key resolved in rewritten query
+  max_cost_improvement_cap: 4.0
+  no_full_table_scan_penalty: -0.5  # Applied if optimized query introduces new Seq Scan
+
+training:
+  output_dir: "checkpoints/querymedic-rl-v1"
+  run_name: "querymedic-rl-v1"
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 5.0e-6
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.01
+  bf16: true
+  optim: "adamw_torch_fused"
+  logging_steps: 10
+  save_steps: 100
+  report_to: "wandb"
+
+wandb:
+  project: "querymedic-rl"

@@ -1,0 +1,39 @@
+# QueryMedic DPO Training Config
+# Stage 3: DPO on (optimal_recommendation, suboptimal_recommendation) preference pairs
+# Chosen = correct index type, minimal write amplification, addresses the actual bottleneck
+# Rejected = wrong index type, over-indexed, or misses the root cause
+
+model:
+  name_or_path: "Qwen/Qwen2.5-7B-Coder-Instruct"
+  rl_checkpoint: "checkpoints/querymedic-rl-v1"
+  torch_dtype: "bfloat16"
+  attn_implementation: "flash_attention_2"
+  trust_remote_code: true
+
+data:
+  train_path: "data/dpo/preference_pairs.jsonl"
+  max_length: 4096
+  max_prompt_length: 2048
+
+dpo:
+  beta: 0.1
+  loss_type: "sigmoid"
+  label_smoothing: 0.0
+
+training:
+  output_dir: "checkpoints/querymedic-dpo-v1"
+  run_name: "querymedic-dpo-v1"
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 5.0e-7
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.01
+  bf16: true
+  optim: "rmsprop"
+  logging_steps: 10
+  save_steps: 100
+  report_to: "wandb"
+
+wandb:
+  project: "querymedic-dpo"
