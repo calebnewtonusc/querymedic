@@ -307,7 +307,7 @@ class StackExchangeCollector:
                         continue
 
                     # Save to file
-                    h = hashlib.md5(record.url.encode()).hexdigest()[:10]
+                    h = hashlib.md5(record.url.encode(), usedforsecurity=False).hexdigest()[:10]
                     out_path = self.output_dir / f"{site}_{tag}_{h}.jsonl"
                     with open(out_path, "w") as f:
                         f.write(json.dumps(asdict(record)) + "\n")
@@ -486,7 +486,7 @@ class PgActivityCrawler:
                 record = self._extract_query_content(html, source_name)
                 if record:
                     record.url = url
-                    h = hashlib.md5(url.encode()).hexdigest()[:10]
+                    h = hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:10]
                     out_path = self.output_dir / f"{source_name}_{h}.jsonl"
                     async with aiofiles.open(str(out_path), "w") as f:
                         await f.write(json.dumps(asdict(record)) + "\n")

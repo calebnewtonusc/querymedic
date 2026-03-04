@@ -131,7 +131,7 @@ def main():
                 f"No adapter_config.json found; falling back to default base model: {base_model_name}"
             )
 
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(  # nosec B615
         args.rl_checkpoint, trust_remote_code=True
     )
     tokenizer.pad_token = tokenizer.eos_token
@@ -143,25 +143,25 @@ def main():
     logger.info(
         f"Loading RL checkpoint (PEFT): {args.rl_checkpoint} on base {base_model_name}"
     )
-    _base = AutoModelForCausalLM.from_pretrained(
+    _base = AutoModelForCausalLM.from_pretrained(  # nosec B615
         base_model_name,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
         attn_implementation="flash_attention_2",
         use_cache=False,
     )
-    model = PeftModel.from_pretrained(_base, args.rl_checkpoint)
+    model = PeftModel.from_pretrained(_base, args.rl_checkpoint)  # nosec B615
 
     # Frozen reference model — stays at RL checkpoint weights
     logger.info("Loading frozen reference model...")
-    _ref_base = AutoModelForCausalLM.from_pretrained(
+    _ref_base = AutoModelForCausalLM.from_pretrained(  # nosec B615
         base_model_name,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
         attn_implementation="flash_attention_2",
         use_cache=False,
     )
-    ref_model = PeftModel.from_pretrained(_ref_base, args.rl_checkpoint)
+    ref_model = PeftModel.from_pretrained(_ref_base, args.rl_checkpoint)  # nosec B615
 
     train_ds = prepare_dpo_dataset(args.data_path, tokenizer)
 

@@ -490,7 +490,7 @@ class RealWorldSchemaHarvester:
             return False
 
         # Deduplicate by content hash
-        content_hash = hashlib.md5(ddl.encode()).hexdigest()
+        content_hash = hashlib.md5(ddl.encode(), usedforsecurity=False).hexdigest()
         if content_hash in self._seen_hashes:
             return False
         self._seen_hashes.add(content_hash)

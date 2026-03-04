@@ -20,14 +20,46 @@ echo ""
 
 # ── Python packages ──────────────────────────────────────────
 echo "Checking Python packages..."
-python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available'; pass('PyTorch CUDA')" 2>/dev/null && pass "PyTorch + CUDA" || fail "PyTorch CUDA not available"
-python -c "import transformers; print(f'transformers {transformers.__version__}')" 2>/dev/null && pass "transformers" || fail "transformers not installed"
-python -c "import peft" 2>/dev/null && pass "peft" || fail "peft not installed"
-python -c "import trl" 2>/dev/null && pass "trl" || fail "trl not installed"
-python -c "import deepspeed" 2>/dev/null && pass "deepspeed" || fail "deepspeed not installed"
-python -c "import sqlglot" 2>/dev/null && pass "sqlglot" || fail "sqlglot not installed"
-python -c "import sqlparse" 2>/dev/null && pass "sqlparse" || fail "sqlparse not installed"
-python -c "import anthropic" 2>/dev/null && pass "anthropic SDK" || warn "anthropic not installed (API fallback disabled)"
+if python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available'; pass('PyTorch CUDA')" 2>/dev/null; then
+    pass "PyTorch + CUDA"
+else
+    fail "PyTorch CUDA not available"
+fi
+if python -c "import transformers; print(f'transformers {transformers.__version__}')" 2>/dev/null; then
+    pass "transformers"
+else
+    fail "transformers not installed"
+fi
+if python -c "import peft" 2>/dev/null; then
+    pass "peft"
+else
+    fail "peft not installed"
+fi
+if python -c "import trl" 2>/dev/null; then
+    pass "trl"
+else
+    fail "trl not installed"
+fi
+if python -c "import deepspeed" 2>/dev/null; then
+    pass "deepspeed"
+else
+    fail "deepspeed not installed"
+fi
+if python -c "import sqlglot" 2>/dev/null; then
+    pass "sqlglot"
+else
+    fail "sqlglot not installed"
+fi
+if python -c "import sqlparse" 2>/dev/null; then
+    pass "sqlparse"
+else
+    fail "sqlparse not installed"
+fi
+if python -c "import anthropic" 2>/dev/null; then
+    pass "anthropic SDK"
+else
+    warn "anthropic not installed (API fallback disabled)"
+fi
 echo ""
 
 # ── GPU availability ─────────────────────────────────────────

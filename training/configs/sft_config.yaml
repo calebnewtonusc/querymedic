@@ -1,3 +1,4 @@
+---
 # QueryMedic SFT Training Config
 # Stage 1: Supervised Fine-Tuning on (EXPLAIN_ANALYZE, schema, slow_query) → (diagnosis, index_DDL, rewritten_query) pairs
 # Base: Qwen/Qwen2.5-7B-Coder-Instruct | LoRA r=64 | DeepSpeed ZeRO-3

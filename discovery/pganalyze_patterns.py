@@ -372,7 +372,7 @@ class PGAnalyzePatternHarvester:
             patterns = extract_patterns(content)
 
             post = PGBlogPost(
-                post_id=hashlib.md5(url.encode()).hexdigest()[:12],
+                post_id=hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:12],
                 source=source_key,
                 source_name=config["name"],
                 url=url,
@@ -409,7 +409,7 @@ class PGAnalyzePatternHarvester:
         links = extract_links(html, config["base_url"], config["link_pattern"])
         # Filter to unique absolute URLs
         links = list(
-            set(l if l.startswith("http") else config["base_url"] + l for l in links)
+            set(line if line.startswith("http") else config["base_url"] + line for line in links)
         )
 
         logger.info(f"  {source_key}: {len(links)} post links found")

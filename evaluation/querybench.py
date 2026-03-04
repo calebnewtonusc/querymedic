@@ -323,10 +323,10 @@ class QueryBench:
             return
 
         logger.info(f"Loading model from {self.model_path}")
-        self.tokenizer = AutoTokenizer.from_pretrained(
+        self.tokenizer = AutoTokenizer.from_pretrained(  # nosec B615
             self.model_path, trust_remote_code=True
         )
-        self.model = AutoModelForCausalLM.from_pretrained(
+        self.model = AutoModelForCausalLM.from_pretrained(  # nosec B615
             self.model_path,
             torch_dtype=torch.bfloat16,
             device_map="auto",

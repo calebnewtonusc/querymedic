@@ -144,7 +144,7 @@ class DBBlogCrawler:
         self.max_concurrent = max_concurrent
 
     def _url_to_filename(self, url: str) -> str:
-        h = hashlib.md5(url.encode()).hexdigest()[:12]
+        h = hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:12]
         slug = re.sub(r"[^\w-]", "_", urlparse(url).path)[:60]
         return f"{slug}_{h}.json"
 

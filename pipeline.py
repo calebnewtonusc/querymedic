@@ -70,7 +70,7 @@ def print_stats() -> None:
         logger.info(f"  {label:<30} {count}")
 
     if MASTER_JSONL.exists():
-        lines = [l for l in MASTER_JSONL.read_text().splitlines() if l.strip()]
+        lines = [line for line in MASTER_JSONL.read_text().splitlines() if line.strip()]
         logger.info(f"\n  Total training pairs: {len(lines)}")
 
         engine_counts: dict[str, int] = {}

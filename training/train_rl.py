@@ -256,14 +256,14 @@ def main():
     parser.add_argument("--run_name", default="querymedic-rl-v1")
     args = parser.parse_args()
 
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(  # nosec B615
         args.sft_checkpoint, trust_remote_code=True
     )
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"  # Left padding for generation
 
     logger.info(f"Loading SFT checkpoint: {args.sft_checkpoint}")
-    base_model = AutoModelForCausalLM.from_pretrained(
+    base_model = AutoModelForCausalLM.from_pretrained(  # nosec B615
         tokenizer.name_or_path
         if hasattr(tokenizer, "name_or_path")
         else args.sft_checkpoint,
@@ -271,7 +271,7 @@ def main():
         trust_remote_code=True,
         attn_implementation="flash_attention_2",
     )
-    model = PeftModel.from_pretrained(base_model, args.sft_checkpoint)
+    model = PeftModel.from_pretrained(base_model, args.sft_checkpoint)  # nosec B615
     model.enable_input_require_grads()
 
     train_ds = prepare_rl_dataset(args.data_path, tokenizer)

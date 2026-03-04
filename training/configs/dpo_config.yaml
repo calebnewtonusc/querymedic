@@ -1,3 +1,4 @@
+---
 # QueryMedic DPO Training Config
 # Stage 3: DPO on (optimal_recommendation, suboptimal_recommendation) preference pairs
 # Chosen = correct index type, minimal write amplification, addresses the actual bottleneck

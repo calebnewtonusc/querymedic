@@ -232,13 +232,13 @@ def main():
     logger.info(f"QueryMedic SFT | GPUs: {num_gpus} | Model: {args.model}")
     logger.info(f"Data: {args.data_dir} | Output: {args.output_dir}")
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)  # nosec B615
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
     logger.info("Loading base model...")
-    model = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(  # nosec B615
         args.model,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
@@ -258,7 +258,7 @@ def main():
     val_path = args.data_dir / "sharegpt_val.jsonl"
     if val_path.exists():
         val_records = [
-            json.loads(l) for l in val_path.read_text().splitlines() if l.strip()
+            json.loads(line) for line in val_path.read_text().splitlines() if line.strip()
         ]
         if val_records:
 

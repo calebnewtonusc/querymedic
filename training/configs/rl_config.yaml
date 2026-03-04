@@ -1,3 +1,4 @@
+---
 # QueryMedic RL Training Config
 # Stage 2: GRPO with EXPLAIN plan cost reduction as verifiable reward
 # Reward = 0.50 * timing_reward + 0.25 * index_type_reward + 0.15 * write_amplification_reward + 0.10 * rewrite_reward
