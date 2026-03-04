@@ -112,7 +112,7 @@ def main() -> None:
             model = str(checkpoints[-1])
         from evaluation.querybench import QueryBench
         bench = QueryBench(model_path=model)
-        bench.run_all()
+        bench.run()
     elif args.collect_only:
         run_collection()
     elif args.synth_only:

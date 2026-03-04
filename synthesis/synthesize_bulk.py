@@ -106,17 +106,30 @@ class SynthesisPipeline:
                 return False
             import re
             data = None
-            code_m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", raw)
-            if code_m:
-                try:
-                    data = json.loads(code_m.group(1))
-                except json.JSONDecodeError:
-                    pass
+            # Try direct parse first
+            try:
+                data = json.loads(raw.strip())
+            except json.JSONDecodeError:
+                pass
+            # Try code-fence block: raw_decode from first '{' inside the fence
             if not data:
-                try:
-                    data = json.loads(raw.strip())
-                except json.JSONDecodeError:
-                    pass
+                code_m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", raw)
+                if code_m:
+                    block = code_m.group(1)
+                    start = block.find("{")
+                    if start != -1:
+                        try:
+                            data, _ = json.JSONDecoder().raw_decode(block, start)
+                        except json.JSONDecodeError:
+                            pass
+            # Fallback: raw_decode from first '{' in the full response
+            if not data:
+                start = raw.find("{")
+                if start != -1:
+                    try:
+                        data, _ = json.JSONDecoder().raw_decode(raw, start)
+                    except json.JSONDecodeError:
+                        pass
             if not data:
                 return False
             out_path.write_text(json.dumps(data if isinstance(data, list) else [data], ensure_ascii=False, indent=2))

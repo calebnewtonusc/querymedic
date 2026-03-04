@@ -88,6 +88,16 @@ INDEX_PROFILES: dict[IndexType, IndexTypeProfile] = {
         update_strategy="Hash table page lock",
         notes="Faster than B-tree for pure equality (=) only. Cannot support range queries, ORDER BY, or LIKE. WAL-logged since PostgreSQL 10. Rarely used — B-tree is usually competitive.",
     ),
+    IndexType.SPGIST: IndexTypeProfile(
+        name=IndexType.SPGIST,
+        display_name="SP-GiST (Space-Partitioned GiST)",
+        supported_operators=["=", "<", ">", "<=", ">=", "<<", ">>", "~=", "@>", "<@"],
+        best_for=["non-balanced data structures (quad-trees, k-d trees, radix trees)", "IP/CIDR ranges (inet)", "geometric points", "text prefix lookups"],
+        write_cost_factor=1.5,
+        storage_factor=1.1,
+        update_strategy="In-place update using partitioned space (no pending list)",
+        notes="Space-Partitioned GiST. More efficient than GiST for data with natural partitioning (e.g., IP addresses, points in bounded space). Use for inet/cidr columns or 2D point data where GiST would be too large.",
+    ),
 }
 
 

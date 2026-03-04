@@ -44,7 +44,7 @@ training:
   tf32: true
   optim: "adamw_torch_fused"
   dataloader_num_workers: 4
-  evaluation_strategy: "steps"
+  eval_strategy: "steps"
   eval_steps: 200
   save_strategy: "steps"
   save_steps: 200

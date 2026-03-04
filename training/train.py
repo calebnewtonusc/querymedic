@@ -34,9 +34,8 @@ from transformers import (
     TrainerCallback,
     TrainerControl,
     TrainerState,
-    TrainingArguments,
 )
-from trl import SFTTrainer
+from trl import SFTConfig, SFTTrainer
 
 QUERYMEDIC_SYSTEM_PROMPT = """You are QueryMedic — a database query optimization specialist.
 
@@ -150,8 +149,8 @@ def build_lora_config() -> LoraConfig:
     )
 
 
-def build_training_args(output_dir: Path, num_gpus: int, deepspeed_config: str | None) -> TrainingArguments:
-    return TrainingArguments(
+def build_training_args(output_dir: Path, num_gpus: int, deepspeed_config: str | None) -> SFTConfig:
+    return SFTConfig(
         output_dir=str(output_dir),
         num_train_epochs=3,
         per_device_train_batch_size=2,
@@ -182,6 +181,9 @@ def build_training_args(output_dir: Path, num_gpus: int, deepspeed_config: str |
         group_by_length=True,
         gradient_checkpointing=True,
         remove_unused_columns=False,
+        # SFTConfig-specific: dataset formatting args belong here, not in SFTTrainer
+        dataset_text_field="text",
+        max_seq_length=MAX_SEQ_LEN,
     )
 
 
@@ -250,7 +252,8 @@ def main():
                 return {"text": text}
 
             from datasets import Dataset as HFDataset
-            val_ds = HFDataset.from_list(val_records).map(format_val, remove_columns=["conversations"])
+            val_ds_raw = HFDataset.from_list(val_records)
+            val_ds = val_ds_raw.map(format_val, remove_columns=val_ds_raw.column_names)
             logger.info(f"Loaded {len(val_ds):,} validation examples")
 
     training_args = build_training_args(args.output_dir, num_gpus, args.deepspeed)
@@ -259,12 +262,10 @@ def main():
 
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        dataset_text_field="text",
-        max_seq_length=MAX_SEQ_LEN,
         callbacks=[LogMetricsCallback()],
     )
 

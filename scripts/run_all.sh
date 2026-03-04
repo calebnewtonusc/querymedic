@@ -21,17 +21,15 @@ bash scripts/check_env.sh
 
 # ── Step 2: Collect data ─────────────────────────────────────
 echo "[2/6] Collecting training data..."
-python pipeline.py --mode collect --output "${DATA_DIR}/raw"
+python pipeline.py --collect-only
 
-echo "  Collected $(wc -l < "${DATA_DIR}/raw/all.jsonl") raw examples"
+echo "  Collection complete"
 
 # ── Step 3: Synthesize SFT pairs ─────────────────────────────
 echo "[3/6] Synthesizing SFT pairs..."
-python pipeline.py --mode synth \
-    --input "${DATA_DIR}/raw" \
-    --output "${DATA_DIR}/sft"
+python pipeline.py --synth-only
 
-echo "  Synthesized $(wc -l < "${DATA_DIR}/sft/train.jsonl") SFT pairs"
+echo "  Synthesis complete"
 
 # ── Step 4: Stage 1 — SFT training ───────────────────────────
 echo "[4/6] Stage 1: SFT training..."
@@ -66,9 +64,8 @@ echo "  DPO checkpoint: ${CHECKPOINT_DIR}/dpo/final"
 # ── Evaluation ───────────────────────────────────────────────
 echo ""
 echo "Running QueryBench evaluation..."
-python pipeline.py --mode eval \
-    --model "${CHECKPOINT_DIR}/dpo/final" \
-    --output "results/${RUN_NAME}"
+python pipeline.py --eval \
+    --model "${CHECKPOINT_DIR}/dpo/final"
 
 echo ""
 echo "QueryMedic pipeline complete."

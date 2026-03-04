@@ -30,7 +30,7 @@ from pathlib import Path
 import torch
 from datasets import Dataset, load_dataset
 from loguru import logger
-from peft import LoraConfig, TaskType
+from peft import LoraConfig, PeftModel, TaskType
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 
@@ -139,28 +139,40 @@ def compute_rewrite_reward(response: str, scenario: dict) -> float:
     return 0.5
 
 
-def reward_function(completions: list[str], prompts: list[str], **kwargs) -> list[float]:
+def reward_function(completions: list[list[str]], prompts: list[str], **kwargs) -> list[float]:
     """
     GRPO reward function — evaluates each completion against the scenario.
 
+    GRPOTrainer calls this with completions shaped as list[list[str]]:
+      - outer list length = num_prompts
+      - inner list length = num_generations per prompt
+    We must return a flat list of length num_prompts * num_generations,
+    one reward value per individual completion.
+
     kwargs contains scenario metadata passed through from the dataset.
-    Must return exactly len(completions) reward values.
     """
     rewards = []
-    scenarios = kwargs.get("scenarios", [{}] * len(completions))
-    if not scenarios:
-        scenarios = [{}] * len(completions)
-    elif len(scenarios) < len(completions):
-        # QM-9: Use math.ceil so that the repetition count covers ALL
-        # completions even when len(completions) is not exactly divisible by
-        # len(scenarios). Integer division undercounts by up to (len(scenarios)-1).
-        num_gen = math.ceil(len(completions) / len(scenarios))
-        scenarios = [s for s in scenarios for _ in range(num_gen)]
-        # Trim to exact length (ceil may have over-produced)
-        scenarios = scenarios[:len(completions)]
+    num_prompts = len(completions)
+    # Flatten completions: each inner list is the group of generations for one prompt
+    flat_completions = [c for group in completions for c in group]
+    total_completions = len(flat_completions)
 
-    for completion in completions:
-        idx = len(rewards)
+    scenarios_raw = kwargs.get("scenarios", [])
+    if not scenarios_raw:
+        scenarios_raw = [{}] * num_prompts
+
+    # Expand scenarios to match num_generations per prompt so that
+    # flat index i maps to scenario scenarios_raw[i // num_gen].
+    num_gen = total_completions // max(num_prompts, 1)
+    scenarios = []
+    for s in scenarios_raw:
+        scenarios.extend([s] * num_gen)
+    # Trim/pad to exact flat length in case of rounding
+    if len(scenarios) < total_completions:
+        scenarios.extend([{}] * (total_completions - len(scenarios)))
+    scenarios = scenarios[:total_completions]
+
+    for idx, completion in enumerate(flat_completions):
         scenario = scenarios[idx] if idx < len(scenarios) else {}
         timing_r = compute_timing_reward(completion, scenario)
         index_type_r = compute_index_type_reward(completion, scenario)
@@ -254,12 +266,13 @@ def main():
     tokenizer.padding_side = "left"   # Left padding for generation
 
     logger.info(f"Loading SFT checkpoint: {args.sft_checkpoint}")
-    model = AutoModelForCausalLM.from_pretrained(
-        args.sft_checkpoint,
+    base_model = AutoModelForCausalLM.from_pretrained(
+        tokenizer.name_or_path if hasattr(tokenizer, "name_or_path") else args.sft_checkpoint,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
         attn_implementation="flash_attention_2",
     )
+    model = PeftModel.from_pretrained(base_model, args.sft_checkpoint)
 
     train_ds = prepare_rl_dataset(args.data_path, tokenizer)
 
@@ -276,7 +289,7 @@ def main():
         bf16=True,
         logging_steps=5,
         save_steps=100,
-        report_to=["wandb"],
+        report_to=["wandb"] if os.environ.get("WANDB_API_KEY") else ["none"],
         # QM-6: Use an absolute path so DeepSpeed can find the config file
         # regardless of the working directory from which the script is launched
         # (e.g. deepspeed --num_gpus 14 training/train_rl.py launches from repo root).

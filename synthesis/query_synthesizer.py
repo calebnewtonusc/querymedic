@@ -291,18 +291,23 @@ def _extract_json_safe(text: str) -> Optional[dict]:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-    # Code block
-    m = re.search(r"```(?:json)?\s*\n(\{.*?\})\s*```", text, re.DOTALL)
+    # Code block — extract content between fences, then raw_decode from first '{'
+    m = re.search(r"```(?:json)?\s*\n([\s\S]+?)\s*```", text)
     if m:
+        block = m.group(1)
+        start = block.find("{")
+        if start != -1:
+            try:
+                obj, _ = json.JSONDecoder().raw_decode(block, start)
+                return obj
+            except json.JSONDecodeError:
+                pass
+    # raw_decode starting from the first '{' in the full text
+    start = text.find("{")
+    if start != -1:
         try:
-            return json.loads(m.group(1))
-        except json.JSONDecodeError:
-            pass
-    # Regex extraction of outermost object
-    m = re.search(r"\{[\s\S]*\}", text)
-    if m:
-        try:
-            return json.loads(m.group(0))
+            obj, _ = json.JSONDecoder().raw_decode(text, start)
+            return obj
         except json.JSONDecodeError:
             pass
     return None

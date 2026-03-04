@@ -62,7 +62,7 @@ class ValidationReport:
     before_timing: TimingResult | None
     after_timing: TimingResult | None
 
-    improvement_factor: float     # after / before execution time (lower = better)
+    improvement_factor: float     # before / after execution time (higher = better)
     improvement_pct: float        # percentage improvement
     verdict: str                  # "APPROVED" | "REJECTED" | "INCONCLUSIVE" | "ERROR"
     verdict_reason: str

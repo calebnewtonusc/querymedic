@@ -22,6 +22,7 @@ Usage:
 
 import argparse
 import os
+from pathlib import Path
 
 import torch
 from datasets import Dataset, load_dataset
@@ -134,8 +135,8 @@ def main():
         bf16=True,
         logging_steps=5,
         save_steps=100,
-        report_to=["wandb"],
-        deepspeed="training/configs/ds_config.json",
+        report_to=["wandb"] if os.environ.get("WANDB_API_KEY") else ["none"],
+        deepspeed=str(Path(__file__).parent / "configs/ds_config.json"),
         # DPO-specific
         beta=0.1,                       # KL penalty strength (lower = more divergence allowed)
         loss_type="sigmoid",            # Standard DPO loss
@@ -149,7 +150,7 @@ def main():
         ref_model=ref_model,
         args=dpo_config,
         train_dataset=train_ds,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
     )
 
     logger.info("Starting DPO training...")
