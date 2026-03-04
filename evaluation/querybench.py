@@ -37,12 +37,14 @@ from loguru import logger
 try:
     from transformers import AutoModelForCausalLM, AutoTokenizer
     import torch
+
     HAS_TRANSFORMERS = True
 except ImportError:
     HAS_TRANSFORMERS = False
 
 try:
     import anthropic
+
     HAS_ANTHROPIC = True
 except ImportError:
     HAS_ANTHROPIC = False
@@ -52,24 +54,27 @@ except ImportError:
 # Scenario definitions
 # ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class QueryBenchScenario:
     """A single QueryBench evaluation scenario."""
+
     id: str
     category: str
     engine: str
     query: str
     explain_output: str
     schema_ddl: str
-    expected_index_type: str          # "btree", "gin", "brin", "gist", "hash", "partial", "covering"
+    expected_index_type: (
+        str  # "btree", "gin", "brin", "gist", "hash", "partial", "covering"
+    )
     expected_index_columns: list[str]
     needs_rewrite: bool
-    expected_improvement_hint: str    # Human description of expected fix
-    difficulty: str                   # "easy", "medium", "hard"
+    expected_improvement_hint: str  # Human description of expected fix
+    difficulty: str  # "easy", "medium", "hard"
 
 
 QUERYBENCH_SCENARIOS: list[QueryBenchScenario] = [
-
     # ── Category 1: Missing B-tree index (easy) ──────────────
     QueryBenchScenario(
         id="qb_001",
@@ -94,13 +99,12 @@ Execution Time: 89.43 ms""",
         expected_improvement_hint="Composite B-tree index on (customer_id, status) — equality on both",
         difficulty="easy",
     ),
-
     # ── Category 2: GIN for JSONB (medium) ───────────────────
     QueryBenchScenario(
         id="qb_002",
         category="gin_jsonb",
         engine="postgresql",
-        query="SELECT id, metadata FROM events WHERE metadata @> '{\"type\": \"purchase\"}'",
+        query='SELECT id, metadata FROM events WHERE metadata @> \'{"type": "purchase"}\'',
         explain_output="""Seq Scan on events  (cost=0.00..12450.00 rows=623 width=256) (actual time=0.055..234.12 rows=623 loops=1)
   Filter: (metadata @> '{"type": "purchase"}'::jsonb)
   Rows Removed by Filter: 499377
@@ -117,7 +121,6 @@ Execution Time: 234.18 ms""",
         expected_improvement_hint="GIN index on metadata — required for @> containment operator",
         difficulty="medium",
     ),
-
     # ── Category 3: BRIN for monotonic timestamp (medium) ────
     QueryBenchScenario(
         id="qb_003",
@@ -142,7 +145,6 @@ Execution Time: 1823.59 ms""",
         expected_improvement_hint="BRIN index on created_at — monotonically increasing, massive table, append-only",
         difficulty="medium",
     ),
-
     # ── Category 4: Covering index for index-only scan (hard) ─
     QueryBenchScenario(
         id="qb_004",
@@ -168,7 +170,6 @@ CREATE INDEX idx_page_views_page_id ON page_views (page_id);""",
         expected_improvement_hint="Covering index: CREATE INDEX ON page_views (page_id) INCLUDE (user_id) — avoids heap lookup",
         difficulty="hard",
     ),
-
     # ── Category 5: Stale stats causing row estimation error (hard) ──
     QueryBenchScenario(
         id="qb_005",
@@ -198,7 +199,6 @@ CREATE TABLE orders (id BIGSERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(i
         expected_improvement_hint="Run ANALYZE on users table — planner estimated 8000 rows but got 8923; large tables need stats refresh",
         difficulty="hard",
     ),
-
     # ── Category 6: NOT IN → NOT EXISTS rewrite (medium) ─────
     QueryBenchScenario(
         id="qb_006",
@@ -221,7 +221,6 @@ CREATE TABLE banned_users (user_id BIGINT PRIMARY KEY, reason TEXT);""",
         expected_improvement_hint="Rewrite NOT IN to NOT EXISTS or LEFT JOIN ... IS NULL; add index on banned_users(user_id)",
         difficulty="medium",
     ),
-
     # ── Category 7: Partial index (hard) ─────────────────────
     QueryBenchScenario(
         id="qb_007",
@@ -248,7 +247,6 @@ Execution Time: 892.25 ms""",
         expected_improvement_hint="Partial index: CREATE INDEX ON jobs (priority DESC, created_at ASC) WHERE status = 'queued' — filters 99.98% of rows",
         difficulty="hard",
     ),
-
     # ── Category 8: MySQL full table scan (easy) ─────────────
     QueryBenchScenario(
         id="qb_008",
@@ -279,6 +277,7 @@ Execution Time: 892.25 ms""",
 # Scoring
 # ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ScenarioResult:
     scenario_id: str
@@ -288,7 +287,7 @@ class ScenarioResult:
     index_type_correct: bool
     ddl_present: bool
     write_amp_mentioned: bool
-    rewrite_correct: bool | None   # None if not applicable
+    rewrite_correct: bool | None  # None if not applicable
     latency_ms: float
     score: float
 
@@ -324,7 +323,9 @@ class QueryBench:
             return
 
         logger.info(f"Loading model from {self.model_path}")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model_path, trust_remote_code=True
+        )
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
             torch_dtype=torch.bfloat16,
@@ -343,13 +344,17 @@ class QueryBench:
 
         results = []
         for i, scenario in enumerate(scenarios):
-            logger.info(f"Scenario {i+1}/{len(scenarios)}: {scenario.id} ({scenario.category})")
+            logger.info(
+                f"Scenario {i + 1}/{len(scenarios)}: {scenario.id} ({scenario.category})"
+            )
             result = self._evaluate_scenario(scenario, max_new_tokens)
             results.append(result)
 
         return self._aggregate_results(results)
 
-    def _evaluate_scenario(self, scenario: QueryBenchScenario, max_new_tokens: int) -> ScenarioResult:
+    def _evaluate_scenario(
+        self, scenario: QueryBenchScenario, max_new_tokens: int
+    ) -> ScenarioResult:
         prompt = self._build_prompt(scenario)
 
         start = time.perf_counter()
@@ -357,18 +362,38 @@ class QueryBench:
         latency_ms = (time.perf_counter() - start) * 1000
 
         # Score the response
-        index_type_correct = self._check_index_type(response, scenario.expected_index_type)
-        ddl_present = bool(re.search(r"CREATE\s+(?:UNIQUE\s+)?INDEX", response, re.IGNORECASE))
-        write_amp_mentioned = bool(re.search(r"write\s+(amplification|overhead|cost|impact|\d+x)", response, re.IGNORECASE))
+        index_type_correct = self._check_index_type(
+            response, scenario.expected_index_type
+        )
+        ddl_present = bool(
+            re.search(r"CREATE\s+(?:UNIQUE\s+)?INDEX", response, re.IGNORECASE)
+        )
+        write_amp_mentioned = bool(
+            re.search(
+                r"write\s+(amplification|overhead|cost|impact|\d+x)",
+                response,
+                re.IGNORECASE,
+            )
+        )
 
         rewrite_correct = None
         if scenario.needs_rewrite:
             rewrite_correct = bool(
-                re.search(r"NOT\s+EXISTS|UNION\s+ALL|LEFT\s+JOIN.*IS\s+NULL|keyset", response, re.IGNORECASE)
+                re.search(
+                    r"NOT\s+EXISTS|UNION\s+ALL|LEFT\s+JOIN.*IS\s+NULL|keyset",
+                    response,
+                    re.IGNORECASE,
+                )
             )
 
         # Weighted score
-        score = self._compute_score(index_type_correct, ddl_present, write_amp_mentioned, rewrite_correct, scenario)
+        score = self._compute_score(
+            index_type_correct,
+            ddl_present,
+            write_amp_mentioned,
+            rewrite_correct,
+            scenario,
+        )
 
         return ScenarioResult(
             scenario_id=scenario.id,
@@ -388,7 +413,9 @@ class QueryBench:
         if scenario.schema_ddl:
             parts.append(f"## Schema\n```sql\n{scenario.schema_ddl}\n```")
         parts.append(f"## EXPLAIN ANALYZE\n```\n{scenario.explain_output}\n```")
-        parts.append("Diagnose the query performance issue and prescribe the optimal fix.")
+        parts.append(
+            "Diagnose the query performance issue and prescribe the optimal fix."
+        )
         return "\n\n".join(parts)
 
     def _generate(self, prompt: str, max_new_tokens: int) -> str:
@@ -402,7 +429,9 @@ class QueryBench:
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ]
-        text = self.tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+        text = self.tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=True
+        )
         inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
 
         with torch.no_grad():
@@ -413,7 +442,7 @@ class QueryBench:
                 do_sample=False,
             )
 
-        gen = out[0][inputs["input_ids"].shape[1]:]
+        gen = out[0][inputs["input_ids"].shape[1] :]
         return self.tokenizer.decode(gen, skip_special_tokens=True)
 
     def _api_generate(self, prompt: str, max_new_tokens: int) -> str:
@@ -434,7 +463,9 @@ class QueryBench:
         expected_lower = expected.lower()
 
         if expected_lower == "covering":
-            return "include" in r_lower or "covering" in r_lower or "index-only" in r_lower
+            return (
+                "include" in r_lower or "covering" in r_lower or "index-only" in r_lower
+            )
 
         if expected_lower == "partial":
             # QM-14: The previous regex `where\s+\w+` matched any WHERE clause
@@ -443,7 +474,11 @@ class QueryBench:
             # to appear after a CREATE INDEX token so we only reward responses
             # that actually propose a partial index.
             return bool(
-                re.search(r"create\s+(?:unique\s+)?index\b.*?\bwhere\s+\w+", response, re.IGNORECASE | re.DOTALL)
+                re.search(
+                    r"create\s+(?:unique\s+)?index\b.*?\bwhere\s+\w+",
+                    response,
+                    re.IGNORECASE | re.DOTALL,
+                )
             )
 
         # Check USING clause
@@ -488,14 +523,23 @@ class QueryBench:
         return QueryBenchResults(
             total_scenarios=total,
             overall_score=round(overall_score, 3),
-            by_category={k: round(sum(v)/len(v), 3) for k, v in by_category.items()},
-            by_difficulty={k: round(sum(v)/len(v), 3) for k, v in by_difficulty.items()},
-            index_type_accuracy=round(sum(1 for r in results if r.index_type_correct) / max(total, 1), 3),
-            ddl_presence_rate=round(sum(1 for r in results if r.ddl_present) / max(total, 1), 3),
-            write_amplification_rate=round(sum(1 for r in results if r.write_amp_mentioned) / max(total, 1), 3),
+            by_category={k: round(sum(v) / len(v), 3) for k, v in by_category.items()},
+            by_difficulty={
+                k: round(sum(v) / len(v), 3) for k, v in by_difficulty.items()
+            },
+            index_type_accuracy=round(
+                sum(1 for r in results if r.index_type_correct) / max(total, 1), 3
+            ),
+            ddl_presence_rate=round(
+                sum(1 for r in results if r.ddl_present) / max(total, 1), 3
+            ),
+            write_amplification_rate=round(
+                sum(1 for r in results if r.write_amp_mentioned) / max(total, 1), 3
+            ),
             rewrite_accuracy=round(
                 sum(1 for r in results if r.rewrite_correct is True)
-                / max(sum(1 for r in results if r.rewrite_correct is not None), 1), 3
+                / max(sum(1 for r in results if r.rewrite_correct is not None), 1),
+                3,
             ),
             avg_latency_ms=round(sum(r.latency_ms for r in results) / max(total, 1), 1),
             scenario_results=results,
@@ -506,11 +550,20 @@ class QueryBench:
 # CLI
 # ─────────────────────────────────────────────────────────────
 
+
 def main():
-    parser = argparse.ArgumentParser(description="QueryBench — Query optimization benchmark")
-    parser.add_argument("--model", default=None, help="Path to model checkpoint (default: API)")
-    parser.add_argument("--output", default="results/querybench.json", help="Output JSON path")
-    parser.add_argument("--scenarios", default=None, help="Path to custom scenarios JSONL")
+    parser = argparse.ArgumentParser(
+        description="QueryBench — Query optimization benchmark"
+    )
+    parser.add_argument(
+        "--model", default=None, help="Path to model checkpoint (default: API)"
+    )
+    parser.add_argument(
+        "--output", default="results/querybench.json", help="Output JSON path"
+    )
+    parser.add_argument(
+        "--scenarios", default=None, help="Path to custom scenarios JSONL"
+    )
     args = parser.parse_args()
 
     bench = QueryBench(model_path=args.model)
@@ -532,7 +585,9 @@ def main():
                     custom_scenarios.append(QueryBenchScenario(**data))
                 except Exception as e:
                     logger.warning(f"Skipping invalid scenario line: {e}")
-        logger.info(f"Loaded {len(custom_scenarios)} custom scenarios from {args.scenarios}")
+        logger.info(
+            f"Loaded {len(custom_scenarios)} custom scenarios from {args.scenarios}"
+        )
 
     results = bench.run(scenarios=custom_scenarios)
 

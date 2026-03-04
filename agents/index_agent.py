@@ -16,7 +16,7 @@ Usage:
 
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import anthropic
 from loguru import logger
@@ -26,7 +26,6 @@ from core.postgres_internals import (
     IndexRecommendation,
     IndexType,
     ANTIPATTERNS,
-    PlannerKnowledge,
     INDEX_PROFILES,
 )
 from core.mysql_internals import estimate_index_size_mb
@@ -35,14 +34,15 @@ from core.mysql_internals import estimate_index_size_mb
 @dataclass
 class IndexProposal:
     """Complete index proposal with DDL and rationale."""
+
     recommendations: list[IndexRecommendation]
-    primary_ddl: str           # The most important index DDL
-    all_ddl: list[str]         # All recommended DDL statements
-    rationale: str             # LLM-generated explanation
-    write_amplification: str   # Impact on writes
+    primary_ddl: str  # The most important index DDL
+    all_ddl: list[str]  # All recommended DDL statements
+    rationale: str  # LLM-generated explanation
+    write_amplification: str  # Impact on writes
     storage_estimate_mb: float
     antipattern_detected: str | None
-    confidence: str            # "high" | "medium" | "low"
+    confidence: str  # "high" | "medium" | "low"
     engine: str
 
 
@@ -81,7 +81,9 @@ Format your response:
 class IndexAgent:
     def __init__(self, model: str = "claude-sonnet-4-6"):
         self.model = model
-        self.client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        self.client = anthropic.Anthropic(
+            api_key=os.environ.get("ANTHROPIC_API_KEY", "")
+        )
 
     def propose(
         self,
@@ -97,9 +99,13 @@ class IndexAgent:
         if antipattern:
             logger.warning(f"Antipattern detected: {antipattern}")
 
-        prompt = self._build_prompt(query, schema_ddl, diagnosis, table_stats, antipattern)
+        prompt = self._build_prompt(
+            query, schema_ddl, diagnosis, table_stats, antipattern
+        )
 
-        logger.info(f"Proposing index strategy (engine={diagnosis.engine}, bottleneck={diagnosis.bottleneck_type})")
+        logger.info(
+            f"Proposing index strategy (engine={diagnosis.engine}, bottleneck={diagnosis.bottleneck_type})"
+        )
 
         resp = self.client.messages.create(
             model=self.model,
@@ -190,11 +196,15 @@ class IndexAgent:
             p = INDEX_PROFILES[IndexType.GIN]
             guide_parts.append(f"GIN: {p.notes} Write cost: {p.write_cost_factor}x")
 
-        if any(t in schema_lower for t in ["geometry", "geography", "tsrange", "int4range"]):
+        if any(
+            t in schema_lower for t in ["geometry", "geography", "tsrange", "int4range"]
+        ):
             p = INDEX_PROFILES[IndexType.GIST]
             guide_parts.append(f"GiST: {p.notes} Write cost: {p.write_cost_factor}x")
 
-        if any(col in query_lower for col in ["created_at", "inserted_at", "timestamp"]):
+        if any(
+            col in query_lower for col in ["created_at", "inserted_at", "timestamp"]
+        ):
             p = INDEX_PROFILES[IndexType.BRIN]
             guide_parts.append(f"BRIN: {p.notes} Write cost: {p.write_cost_factor}x")
 
@@ -232,7 +242,9 @@ class IndexAgent:
 
         return None
 
-    def _parse_recommendations(self, ddl_blocks: list[str], engine: str) -> list[IndexRecommendation]:
+    def _parse_recommendations(
+        self, ddl_blocks: list[str], engine: str
+    ) -> list[IndexRecommendation]:
         """Parse DDL blocks into structured IndexRecommendation objects."""
         recs = []
         for ddl in ddl_blocks:
@@ -276,9 +288,12 @@ class IndexAgent:
         partial_pred = m.group(6).strip() if m.group(6) else None
 
         idx_type_map = {
-            "BTREE": IndexType.BTREE, "GIN": IndexType.GIN,
-            "GIST": IndexType.GIST, "BRIN": IndexType.BRIN,
-            "HASH": IndexType.HASH, "SPGIST": IndexType.SPGIST,
+            "BTREE": IndexType.BTREE,
+            "GIN": IndexType.GIN,
+            "GIST": IndexType.GIST,
+            "BRIN": IndexType.BRIN,
+            "HASH": IndexType.HASH,
+            "SPGIST": IndexType.SPGIST,
         }
         idx_type = idx_type_map.get(method, IndexType.BTREE)
 
@@ -293,7 +308,9 @@ class IndexAgent:
         )
         return rec
 
-    def _estimate_storage(self, recs: list[IndexRecommendation], table_stats: dict | None) -> float:
+    def _estimate_storage(
+        self, recs: list[IndexRecommendation], table_stats: dict | None
+    ) -> float:
         """Rough storage estimate across all recommended indexes."""
         if not table_stats or not recs:
             return 0.0
@@ -302,7 +319,9 @@ class IndexAgent:
         total_mb = 0.0
 
         for rec in recs:
-            profile = INDEX_PROFILES.get(rec.index_type, INDEX_PROFILES[IndexType.BTREE])
+            profile = INDEX_PROFILES.get(
+                rec.index_type, INDEX_PROFILES[IndexType.BTREE]
+            )
             # Rough: 50 bytes per row for key columns * storage_factor
             key_bytes = len(rec.columns) * 12  # ~12 bytes per column key
             base_mb = estimate_index_size_mb(row_count, key_bytes)
@@ -320,7 +339,8 @@ class IndexAgent:
 
     def _extract_section(self, text: str, section: str) -> str | None:
         m = re.search(
-            rf"(?:#{1,3}\s*)?{re.escape(section)}[:\s]*(.*?)(?=\n#{1,3}|\Z)",
-            text, re.IGNORECASE | re.DOTALL
+            rf"(?:#{1, 3}\s*)?{re.escape(section)}[:\s]*(.*?)(?=\n#{1, 3}|\Z)",
+            text,
+            re.IGNORECASE | re.DOTALL,
         )
         return m.group(1).strip()[:500] if m else None

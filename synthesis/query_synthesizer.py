@@ -27,6 +27,7 @@ Usage:
 
 import sys
 from pathlib import Path as _Path
+
 sys.path.insert(0, str(_Path(__file__).parent.parent))
 
 import asyncio
@@ -34,8 +35,6 @@ import json
 import os
 import random
 import re
-import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -46,8 +45,7 @@ try:
     import aiofiles
 except ImportError as exc:
     raise ImportError(
-        "aiofiles is required for query_synthesizer. "
-        "Install with: pip install aiofiles"
+        "aiofiles is required for query_synthesizer. Install with: pip install aiofiles"
     ) from exc
 import httpx
 from anthropic import AsyncAnthropic
@@ -80,6 +78,7 @@ Quantify everything — vague advice is not acceptable."""
 
 # ─── Prompt Templates ──────────────────────────────────────────────────────────
 
+
 def build_user_prompt_from_corpus(record: dict) -> str:
     """Build user prompt from a Stack Exchange / pg_activity corpus record."""
     parts = []
@@ -111,7 +110,7 @@ def build_user_prompt_from_pattern(record: dict) -> str:
     """Build user prompt from a pganalyze blog pattern record."""
     parts = []
     patterns = record.get("patterns", [])
-    content = record.get("content", "")
+    record.get("content", "")
     title = record.get("title", "")
     sql_snippets = record.get("sql_snippets", [])
     explain_outputs = record.get("explain_outputs", [])
@@ -152,7 +151,9 @@ def build_user_prompt_from_pr(record: dict) -> str:
     if query_patterns:
         p = query_patterns[0]
         if p.get("before_sql"):
-            parts.append(f"**Query before fix:**\n```sql\n{p['before_sql'][:1000]}\n```")
+            parts.append(
+                f"**Query before fix:**\n```sql\n{p['before_sql'][:1000]}\n```"
+            )
         if p.get("after_sql"):
             parts.append(f"**Query after fix:**\n```sql\n{p['after_sql'][:1000]}\n```")
     if migration_sql:
@@ -169,7 +170,9 @@ def build_user_prompt_from_pr(record: dict) -> str:
     )
 
 
-def build_user_prompt_from_schema(record: dict, scenario_type: str = "missing_index") -> str:
+def build_user_prompt_from_schema(
+    record: dict, scenario_type: str = "missing_index"
+) -> str:
     """Build a synthetic slow query prompt using a real-world schema."""
     tables = record.get("tables", [])
     if not tables:
@@ -192,9 +195,9 @@ def build_user_prompt_from_schema(record: dict, scenario_type: str = "missing_in
             f"Imagine this table has {rng.randint(500_000, 20_000_000):,} rows. "
             f"A query like:\n\n"
             f"```sql\nSELECT * FROM {table_name}\n"
-            f"WHERE {col_names[min(1, len(col_names)-1)]} = $1\n"
-            f"  AND {col_names[min(2, len(col_names)-1)]} > NOW() - INTERVAL '30 days'\n"
-            f"ORDER BY {col_names[min(2, len(col_names)-1)]} DESC\nLIMIT 100;\n```\n\n"
+            f"WHERE {col_names[min(1, len(col_names) - 1)]} = $1\n"
+            f"  AND {col_names[min(2, len(col_names) - 1)]} > NOW() - INTERVAL '30 days'\n"
+            f"ORDER BY {col_names[min(2, len(col_names) - 1)]} DESC\nLIMIT 100;\n```\n\n"
             f"is performing a sequential scan. The EXPLAIN output shows:\n"
             f"```\nSeq Scan on {table_name}  (cost=0.00..{rng.randint(50000, 500000):.2f} "
             f"rows={rng.randint(1000000, 20000000)} width=120)\n"
@@ -244,13 +247,17 @@ def build_user_prompt_from_schema(record: dict, scenario_type: str = "missing_in
 
 # ─── Quality Scoring ───────────────────────────────────────────────────────────
 
+
 def score_synthesis_quality(response: str) -> float:
     """Score LLM synthesis quality on a 0.0–1.0 scale."""
     score = 0.0
     text_lower = response.lower()
 
     # Has root cause analysis
-    if any(kw in text_lower for kw in ["root cause", "seq scan", "sequential scan", "missing index", "n+1"]):
+    if any(
+        kw in text_lower
+        for kw in ["root cause", "seq scan", "sequential scan", "missing index", "n+1"]
+    ):
         score += 0.15
 
     # Has specific numbers/metrics
@@ -266,15 +273,41 @@ def score_synthesis_quality(response: str) -> float:
         score += 0.05
 
     # Has index justification
-    if any(kw in text_lower for kw in ["column order", "selectivity", "cardinality", "partial index", "covering"]):
+    if any(
+        kw in text_lower
+        for kw in [
+            "column order",
+            "selectivity",
+            "cardinality",
+            "partial index",
+            "covering",
+        ]
+    ):
         score += 0.10
 
     # Has write impact analysis
-    if any(kw in text_lower for kw in ["write amplification", "write overhead", "insert overhead", "update overhead"]):
+    if any(
+        kw in text_lower
+        for kw in [
+            "write amplification",
+            "write overhead",
+            "insert overhead",
+            "update overhead",
+        ]
+    ):
         score += 0.10
 
     # Has EXPLAIN output reference
-    if any(kw in text_lower for kw in ["index scan", "bitmap heap scan", "index only scan", "cost=", "actual time="]):
+    if any(
+        kw in text_lower
+        for kw in [
+            "index scan",
+            "bitmap heap scan",
+            "index only scan",
+            "cost=",
+            "actual time=",
+        ]
+    ):
         score += 0.10
 
     # Adequate length
@@ -329,6 +362,7 @@ def format_as_sharegpt(user_prompt: str, assistant_response: str, source: str) -
 
 
 # ─── LLM Backends ─────────────────────────────────────────────────────────────
+
 
 class ClaudeBackend:
     """Anthropic Claude API backend."""
@@ -399,6 +433,7 @@ class VLLMBackend:
 
 
 # ─── Main Synthesizer ─────────────────────────────────────────────────────────
+
 
 class QueryMedicSynthesizer:
     """
@@ -563,7 +598,9 @@ class QueryMedicSynthesizer:
             rng.shuffle(records)
             records = records[:limit]
 
-        logger.info(f"Synthesizing {len(records):,} training pairs (workers={self.workers})")
+        logger.info(
+            f"Synthesizing {len(records):,} training pairs (workers={self.workers})"
+        )
 
         batch_size = self.workers * 4
         for i in range(0, len(records), batch_size):
@@ -621,7 +658,7 @@ SCENARIO_TEMPLATES = [
         "index_type": "GIN (jsonb_path_ops)",
         "write_amplification": "GIN indexes have higher per-row write cost than B-tree due to posting list maintenance. At 50k events/day: acceptable overhead.",
         "expected_improvement": "3422ms → ~45ms (76x). Bitmap Index Scan on GIN index eliminates 99.8% of rows before heap fetch.",
-        "explain_after": "Bitmap Heap Scan on events  (cost=42.31..1847.23 rows=800 width=240) (actual time=8.234..45.123 rows=12400 loops=1)\n  Recheck Cond: (data @> '{\"event_type\": \"purchase\"}'::jsonb)\n  ->  Bitmap Index Scan on idx_events_data_gin  (cost=0.00..42.11 rows=800 width=0) (actual time=8.012..8.012 rows=12400 loops=1)\nExecution Time: 45.891 ms",
+        "explain_after": 'Bitmap Heap Scan on events  (cost=42.31..1847.23 rows=800 width=240) (actual time=8.234..45.123 rows=12400 loops=1)\n  Recheck Cond: (data @> \'{"event_type": "purchase"}\'::jsonb)\n  ->  Bitmap Index Scan on idx_events_data_gin  (cost=0.00..42.11 rows=800 width=0) (actual time=8.012..8.012 rows=12400 loops=1)\nExecution Time: 45.891 ms',
     },
     # Covering index for index-only scan
     {
@@ -655,7 +692,9 @@ def generate_static_scenarios(count: int, output_dir: Path) -> int:
     with out_path.open("w") as f:
         for i in range(count):
             template = SCENARIO_TEMPLATES[i % len(SCENARIO_TEMPLATES)]
-            row_count = rng.choice([100_000, 500_000, 2_000_000, 10_000_000, 50_000_000])
+            row_count = rng.choice(
+                [100_000, 500_000, 2_000_000, 10_000_000, 50_000_000]
+            )
 
             user_msg = (
                 f"Analyze this PostgreSQL performance problem.\n\n"
@@ -697,19 +736,28 @@ def generate_static_scenarios(count: int, output_dir: Path) -> int:
 if __name__ == "__main__":
     import argparse
     from dotenv import load_dotenv
+
     load_dotenv()
 
     parser = argparse.ArgumentParser(description="QueryMedic LLM synthesis pipeline")
     parser.add_argument("--backend", choices=["claude", "vllm"], default="claude")
-    parser.add_argument("--vllm-urls", nargs="+", default=None,
-                        help="vLLM base URLs (e.g., http://localhost:8001/v1)")
+    parser.add_argument(
+        "--vllm-urls",
+        nargs="+",
+        default=None,
+        help="vLLM base URLs (e.g., http://localhost:8001/v1)",
+    )
     parser.add_argument("--workers", type=int, default=12)
-    parser.add_argument("--limit", type=int, default=None,
-                        help="Max records to process (default: all)")
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Max records to process (default: all)"
+    )
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
     parser.add_argument("--output-dir", type=Path, default=TRAINING_DIR)
-    parser.add_argument("--static-only", action="store_true",
-                        help="Generate static synthetic scenarios only (no LLM)")
+    parser.add_argument(
+        "--static-only",
+        action="store_true",
+        help="Generate static synthetic scenarios only (no LLM)",
+    )
     parser.add_argument("--static-count", type=int, default=5000)
     args = parser.parse_args()
 

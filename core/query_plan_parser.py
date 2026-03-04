@@ -32,11 +32,19 @@ def plan_to_training_context(plan: ExplainPlan) -> dict:
         "execution_time_ms": plan.execution_time_ms,
         "bottleneck_type": plan.bottleneck_type,
         "seq_scans": [
-            {"relation": n.relation, "rows_filtered": n.rows_removed_by_filter, "actual_rows": n.actual_rows}
+            {
+                "relation": n.relation,
+                "rows_filtered": n.rows_removed_by_filter,
+                "actual_rows": n.actual_rows,
+            }
             for n in plan.seq_scans
         ],
         "index_scans": [
-            {"relation": n.relation, "index": n.index_name, "actual_rows": n.actual_rows}
+            {
+                "relation": n.relation,
+                "index": n.index_name,
+                "actual_rows": n.actual_rows,
+            }
             for n in plan.index_scans
         ],
         "row_estimation_errors": [

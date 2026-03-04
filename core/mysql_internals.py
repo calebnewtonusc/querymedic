@@ -13,18 +13,19 @@ from enum import Enum
 
 class MySQLAccessType(Enum):
     """MySQL EXPLAIN access type (from best to worst)."""
-    SYSTEM = "system"      # Single row (system table)
-    CONST = "const"        # Single row via primary key or unique index
-    EQ_REF = "eq_ref"      # One row per combination of previous tables
-    REF = "ref"            # Non-unique index lookup
+
+    SYSTEM = "system"  # Single row (system table)
+    CONST = "const"  # Single row via primary key or unique index
+    EQ_REF = "eq_ref"  # One row per combination of previous tables
+    REF = "ref"  # Non-unique index lookup
     FULLTEXT = "fulltext"  # Full-text index
     REF_OR_NULL = "ref_or_null"
-    INDEX_MERGE = "index_merge"    # Union/intersection of indexes
+    INDEX_MERGE = "index_merge"  # Union/intersection of indexes
     UNIQUE_SUBQUERY = "unique_subquery"
     INDEX_SUBQUERY = "index_subquery"
-    RANGE = "range"        # Range scan using index
-    INDEX = "index"        # Full index scan (better than ALL)
-    ALL = "all"            # Full table scan (worst)
+    RANGE = "range"  # Range scan using index
+    INDEX = "index"  # Full index scan (better than ALL)
+    ALL = "all"  # Full table scan (worst)
 
 
 @dataclass
@@ -93,7 +94,6 @@ def interpret_mysql_explain(explain_output: str) -> dict:
     Returns:
         dict with keys: access_types, bottlenecks, recommendations
     """
-    import re
 
     rows = []
     for line in explain_output.splitlines():
@@ -106,15 +106,17 @@ def interpret_mysql_explain(explain_output: str) -> dict:
             # 5:possible_keys  6:key  7:key_len  8:ref  9:rows  10:filtered  11:Extra
             # The previous code used cols[5] for "key" — that is "possible_keys".
             # cols[6] is the actual key chosen by the optimizer.
-            rows.append({
-                "id": cols[0] if len(cols) > 0 else "",
-                "select_type": cols[1] if len(cols) > 1 else "",
-                "table": cols[2] if len(cols) > 2 else "",
-                "type": cols[4] if len(cols) > 4 else "",
-                "key": cols[6] if len(cols) > 6 else "",
-                "rows": int(cols[9]) if len(cols) > 9 and cols[9].isdigit() else 0,
-                "extra": cols[11] if len(cols) > 11 else "",
-            })
+            rows.append(
+                {
+                    "id": cols[0] if len(cols) > 0 else "",
+                    "select_type": cols[1] if len(cols) > 1 else "",
+                    "table": cols[2] if len(cols) > 2 else "",
+                    "type": cols[4] if len(cols) > 4 else "",
+                    "key": cols[6] if len(cols) > 6 else "",
+                    "rows": int(cols[9]) if len(cols) > 9 and cols[9].isdigit() else 0,
+                    "extra": cols[11] if len(cols) > 11 else "",
+                }
+            )
 
     bottlenecks = []
     recommendations = []
@@ -126,12 +128,16 @@ def interpret_mysql_explain(explain_output: str) -> dict:
         row_count = row["rows"]
 
         if access == "ALL":
-            bottlenecks.append(f"Full table scan (ALL) on {table} — {row_count:,} rows examined")
+            bottlenecks.append(
+                f"Full table scan (ALL) on {table} — {row_count:,} rows examined"
+            )
             recommendations.append(
                 f"Add index on {table}. Check WHERE clause columns and join conditions."
             )
         elif access == "index":
-            bottlenecks.append(f"Full index scan on {table} — slower than range but faster than ALL")
+            bottlenecks.append(
+                f"Full index scan on {table} — slower than range but faster than ALL"
+            )
 
         if "Using filesort" in extra:
             bottlenecks.append(f"Filesort on {table} — no index for ORDER BY")
@@ -140,7 +146,9 @@ def interpret_mysql_explain(explain_output: str) -> dict:
             )
 
         if "Using temporary" in extra:
-            bottlenecks.append(f"Temporary table created for {table} — GROUP BY/DISTINCT without index")
+            bottlenecks.append(
+                f"Temporary table created for {table} — GROUP BY/DISTINCT without index"
+            )
             recommendations.append(
                 f"Add index with GROUP BY columns first for {table}."
             )

@@ -6,18 +6,21 @@ Processes DBA Q&A, blog posts, and EXPLAIN plans into structured training pairs.
 
 import sys
 from pathlib import Path as _Path
+
 sys.path.insert(0, str(_Path(__file__).parent.parent))
 
 import asyncio
 import json
 import os
-import time
 from pathlib import Path
 
 import httpx
 from loguru import logger
 
-from synthesis.prompts import QUERY_OPTIMIZATION_SYSTEM_PROMPT, EXPLAIN_ANALYSIS_SYSTEM_PROMPT
+from synthesis.prompts import (
+    QUERY_OPTIMIZATION_SYSTEM_PROMPT,
+    EXPLAIN_ANALYSIS_SYSTEM_PROMPT,
+)
 
 RAW_DIR = Path(__file__).parents[1] / "data" / "raw"
 PROCESSED_DIR = Path(__file__).parents[1] / "data" / "processed"
@@ -46,29 +49,53 @@ class SynthesisPipeline:
         self._vllm_idx += 1
         return url
 
-    async def _call(self, system: str, user: str, client: httpx.AsyncClient) -> str | None:
+    async def _call(
+        self, system: str, user: str, client: httpx.AsyncClient
+    ) -> str | None:
         if self.backend == "vllm" and self.vllm_urls:
             url = self._next_vllm()
             try:
-                resp = await client.post(f"{url}/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {os.environ.get('VLLM_API_KEY', 'qm')}"},
-                    json={"model": VLLM_MODEL, "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user}
-                    ], "max_tokens": 4096, "temperature": 0.3},
-                    timeout=120.0)
-                return resp.json()["choices"][0]["message"]["content"] if resp.status_code == 200 else None
+                resp = await client.post(
+                    f"{url}/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {os.environ.get('VLLM_API_KEY', 'qm')}"
+                    },
+                    json={
+                        "model": VLLM_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": user},
+                        ],
+                        "max_tokens": 4096,
+                        "temperature": 0.3,
+                    },
+                    timeout=120.0,
+                )
+                return (
+                    resp.json()["choices"][0]["message"]["content"]
+                    if resp.status_code == 200
+                    else None
+                )
             except Exception as e:
                 logger.debug(f"vLLM error: {e}")
                 return None
         else:
             try:
-                resp = await client.post("https://api.anthropic.com/v1/messages",
-                    headers={"x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
-                             "anthropic-version": "2023-06-01", "content-type": "application/json"},
-                    json={"model": CLAUDE_MODEL, "max_tokens": 4096,
-                          "system": system, "messages": [{"role": "user", "content": user}]},
-                    timeout=120.0)
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": CLAUDE_MODEL,
+                        "max_tokens": 4096,
+                        "system": system,
+                        "messages": [{"role": "user", "content": user}],
+                    },
+                    timeout=120.0,
+                )
                 # QM-3: Only attempt JSON parsing on successful responses.
                 # resp.json() on a non-200 body (e.g. rate-limit HTML) raises
                 # a JSONDecodeError which was silently swallowed before.
@@ -98,13 +125,20 @@ class SynthesisPipeline:
             "Analyze this plan and generate an optimization training pair."
         )
 
-    async def _synthesize_one(self, system: str, user: str, out_path: Path,
-                               client: httpx.AsyncClient, sem: asyncio.Semaphore) -> bool:
+    async def _synthesize_one(
+        self,
+        system: str,
+        user: str,
+        out_path: Path,
+        client: httpx.AsyncClient,
+        sem: asyncio.Semaphore,
+    ) -> bool:
         async with sem:
             raw = await self._call(system, user, client)
             if not raw:
                 return False
             import re
+
             data = None
             # Try direct parse first
             try:
@@ -132,7 +166,13 @@ class SynthesisPipeline:
                         pass
             if not data:
                 return False
-            out_path.write_text(json.dumps(data if isinstance(data, list) else [data], ensure_ascii=False, indent=2))
+            out_path.write_text(
+                json.dumps(
+                    data if isinstance(data, list) else [data],
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
             return True
 
     def run_all(self, limit: int | None = None) -> int:
@@ -149,7 +189,13 @@ class SynthesisPipeline:
             for i, f in enumerate(so_files[:limit]):
                 out = self.output_dir / f"se_{i:06d}.json"
                 if not out.exists():
-                    ok = await self._synthesize_one(QUERY_OPTIMIZATION_SYSTEM_PROMPT, self._build_so_prompt(f), out, client, sem)
+                    ok = await self._synthesize_one(
+                        QUERY_OPTIMIZATION_SYSTEM_PROMPT,
+                        self._build_so_prompt(f),
+                        out,
+                        client,
+                        sem,
+                    )
                     if ok:
                         total += 1
 
@@ -159,7 +205,13 @@ class SynthesisPipeline:
             for i, f in enumerate(explain_files[:limit]):
                 out = self.output_dir / f"explain_{i:06d}.json"
                 if not out.exists():
-                    ok = await self._synthesize_one(EXPLAIN_ANALYSIS_SYSTEM_PROMPT, self._build_explain_prompt(f), out, client, sem)
+                    ok = await self._synthesize_one(
+                        EXPLAIN_ANALYSIS_SYSTEM_PROMPT,
+                        self._build_explain_prompt(f),
+                        out,
+                        client,
+                        sem,
+                    )
                     if ok:
                         total += 1
 
@@ -188,5 +240,7 @@ class SynthesisPipeline:
             except OSError:
                 pass
 
-        logger.success(f"QueryMedic synthesis: {total} sources → {count} pairs → {master}")
+        logger.success(
+            f"QueryMedic synthesis: {total} sources → {count} pairs → {master}"
+        )
         return count

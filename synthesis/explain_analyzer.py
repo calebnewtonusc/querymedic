@@ -35,7 +35,19 @@ JOIN_NODES = {"Hash Join", "Merge Join", "Nested Loop"}
 SORT_NODES = {"Sort", "Incremental Sort"}
 AGG_NODES = {"HashAggregate", "GroupAggregate", "Aggregate", "MixedAggregate"}
 GATHER_NODES = {"Gather", "Gather Merge"}
-OTHER_NODES = {"Hash", "Materialize", "Memoize", "Limit", "Unique", "Append", "Subquery Scan", "CTE Scan", "Result", "SetOp", "WindowAgg"}
+OTHER_NODES = {
+    "Hash",
+    "Materialize",
+    "Memoize",
+    "Limit",
+    "Unique",
+    "Append",
+    "Subquery Scan",
+    "CTE Scan",
+    "Result",
+    "SetOp",
+    "WindowAgg",
+}
 
 # Row estimation error threshold (factor)
 ESTIMATION_ERROR_THRESHOLD = 10.0
@@ -52,6 +64,7 @@ NESTED_LOOP_LARGE_OUTER = 5_000
 @dataclass
 class PlanNodeAnalysis:
     """Analysis of a single EXPLAIN plan node."""
+
     node_type: str
     relation: Optional[str]
     index_name: Optional[str]
@@ -68,7 +81,7 @@ class PlanNodeAnalysis:
     shared_hit_blocks: int
     shared_read_blocks: int
     shared_written_blocks: int
-    sort_method: Optional[str]   # e.g. "quicksort", "external merge"
+    sort_method: Optional[str]  # e.g. "quicksort", "external merge"
     sort_space_used_kb: Optional[int]
     depth: int
     children: list["PlanNodeAnalysis"] = field(default_factory=list)
@@ -86,7 +99,10 @@ class PlanNodeAnalysis:
     @property
     def is_bad_row_estimate(self) -> bool:
         ratio = self.row_estimation_ratio
-        return ratio is not None and (ratio > ESTIMATION_ERROR_THRESHOLD or ratio < 1.0 / ESTIMATION_ERROR_THRESHOLD)
+        return ratio is not None and (
+            ratio > ESTIMATION_ERROR_THRESHOLD
+            or ratio < 1.0 / ESTIMATION_ERROR_THRESHOLD
+        )
 
     @property
     def cache_hit_rate(self) -> Optional[float]:
@@ -104,6 +120,7 @@ class PlanNodeAnalysis:
 @dataclass
 class ExplainAnalysisResult:
     """Complete analysis of an EXPLAIN (FORMAT JSON) plan."""
+
     planning_time_ms: float
     execution_time_ms: float
     root_node: Optional[PlanNodeAnalysis]
@@ -137,7 +154,11 @@ class ExplainAnalysisResult:
 
     @property
     def worst_row_estimate_ratio(self) -> Optional[float]:
-        ratios = [n.row_estimation_ratio for n in self.bad_row_estimates if n.row_estimation_ratio]
+        ratios = [
+            n.row_estimation_ratio
+            for n in self.bad_row_estimates
+            if n.row_estimation_ratio
+        ]
         return max(ratios, default=None)
 
 
@@ -242,9 +263,7 @@ def _classify_bottleneck(
             f"Missing index on filter column(s)."
         )
 
-        if bad_estimates and any(
-            n.relation == worst.relation for n in bad_estimates
-        ):
+        if bad_estimates and any(n.relation == worst.relation for n in bad_estimates):
             bottleneck_type = "seq_scan_stale_stats"
             ratio = worst.row_estimation_ratio
             ratio_str = f"{ratio:.1f}x" if ratio else "unknown"
@@ -272,7 +291,11 @@ def _classify_bottleneck(
 
     if expensive_sorts:
         worst = max(expensive_sorts, key=lambda n: n.total_actual_ms)
-        spill = " (spills to disk)" if worst.sort_method and "external" in worst.sort_method.lower() else ""
+        spill = (
+            " (spills to disk)"
+            if worst.sort_method and "external" in worst.sort_method.lower()
+            else ""
+        )
         return "sort_overhead", (
             f"Sort node takes {worst.total_actual_ms:.0f}ms{spill}. "
             f"Sort space used: {worst.sort_space_used_kb or 'N/A'}kB. "
@@ -378,8 +401,7 @@ def _format_plan_tree(node: Optional[PlanNodeAnalysis], indent: int = 0) -> str:
     if node.index_name:
         node_line += f" using {node.index_name}"
     node_line += (
-        f"  (cost={node.startup_cost:.2f}..{node.total_cost:.2f}"
-        f" rows={node.plan_rows})"
+        f"  (cost={node.startup_cost:.2f}..{node.total_cost:.2f} rows={node.plan_rows})"
     )
     if node.actual_total_ms > 0:
         node_line += (
@@ -388,7 +410,9 @@ def _format_plan_tree(node: Optional[PlanNodeAnalysis], indent: int = 0) -> str:
         )
     lines.append(node_line)
     if node.rows_removed_by_filter > 0:
-        lines.append(f"{'  ' * (indent + 1)}Rows Removed by Filter: {node.rows_removed_by_filter:,}")
+        lines.append(
+            f"{'  ' * (indent + 1)}Rows Removed by Filter: {node.rows_removed_by_filter:,}"
+        )
     if node.heap_fetches > 0:
         lines.append(f"{'  ' * (indent + 1)}Heap Fetches: {node.heap_fetches:,}")
 
@@ -476,33 +500,30 @@ class ExplainJSONAnalyzer:
 
         # Categorize nodes
         seq_scans = [
-            n for n in all_nodes
+            n
+            for n in all_nodes
             if n.node_type in SEQ_SCAN_NODES
             and n.rows_removed_by_filter >= MIN_ROWS_REMOVED
         ]
         bad_row_estimates = [
-            n for n in all_nodes
-            if n.is_bad_row_estimate and n.plan_rows > 0
+            n for n in all_nodes if n.is_bad_row_estimate and n.plan_rows > 0
         ]
         expensive_sorts = [
-            n for n in all_nodes
-            if n.node_type in SORT_NODES
-            and n.total_actual_ms >= SLOW_SORT_MS
+            n
+            for n in all_nodes
+            if n.node_type in SORT_NODES and n.total_actual_ms >= SLOW_SORT_MS
         ]
         heap_fetch_heavy = [
-            n for n in all_nodes
-            if n.node_type == "Bitmap Heap Scan"
-            and n.heap_fetches >= MIN_HEAP_FETCHES
+            n
+            for n in all_nodes
+            if n.node_type == "Bitmap Heap Scan" and n.heap_fetches >= MIN_HEAP_FETCHES
         ]
         large_nested_loops = [
-            n for n in all_nodes
-            if n.node_type == "Nested Loop"
-            and n.actual_rows >= NESTED_LOOP_LARGE_OUTER
+            n
+            for n in all_nodes
+            if n.node_type == "Nested Loop" and n.actual_rows >= NESTED_LOOP_LARGE_OUTER
         ]
-        disk_heavy_nodes = [
-            n for n in all_nodes
-            if n.is_disk_heavy
-        ]
+        disk_heavy_nodes = [n for n in all_nodes if n.is_disk_heavy]
 
         bottleneck_type, bottleneck_summary = _classify_bottleneck(
             seq_scans=seq_scans,
@@ -587,10 +608,14 @@ def analyze_from_file(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Analyze PostgreSQL EXPLAIN JSON output")
+    parser = argparse.ArgumentParser(
+        description="Analyze PostgreSQL EXPLAIN JSON output"
+    )
     parser.add_argument("plan_file", help="Path to EXPLAIN (FORMAT JSON) output file")
     parser.add_argument("--schema", default=None, help="Path to schema DDL file")
-    parser.add_argument("--prompt", action="store_true", help="Print LLM diagnosis prompt")
+    parser.add_argument(
+        "--prompt", action="store_true", help="Print LLM diagnosis prompt"
+    )
     args = parser.parse_args()
 
     schema_ddl = None

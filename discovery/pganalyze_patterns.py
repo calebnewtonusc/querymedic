@@ -27,7 +27,7 @@ import asyncio
 import hashlib
 import json
 import re
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional
 
@@ -37,6 +37,7 @@ from loguru import logger
 
 try:
     from bs4 import BeautifulSoup
+
     BS4_AVAILABLE = True
 except ImportError:
     BS4_AVAILABLE = False
@@ -49,77 +50,100 @@ BLOG_SOURCES = {
         "name": "pganalyze Blog",
         "base_url": "https://pganalyze.com",
         "blog_url": "https://pganalyze.com/blog",
-        "link_pattern": re.compile(r'/blog/[\w-]+'),
+        "link_pattern": re.compile(r"/blog/[\w-]+"),
     },
     "citus": {
         "name": "Citus Data Blog",
         "base_url": "https://www.citusdata.com",
         "blog_url": "https://www.citusdata.com/blog",
-        "link_pattern": re.compile(r'/blog/[\w-]+'),
+        "link_pattern": re.compile(r"/blog/[\w-]+"),
     },
     "timescale": {
         "name": "Timescale Blog",
         "base_url": "https://www.timescale.com",
         "blog_url": "https://www.timescale.com/blog",
-        "link_pattern": re.compile(r'/blog/[\w-]+'),
+        "link_pattern": re.compile(r"/blog/[\w-]+"),
     },
     "pgdash": {
         "name": "PgDash Blog",
         "base_url": "https://pgdash.io",
         "blog_url": "https://pgdash.io/blog",
-        "link_pattern": re.compile(r'/blog/[\w-]+'),
+        "link_pattern": re.compile(r"/blog/[\w-]+"),
     },
     "postgresql_wiki": {
         "name": "PostgreSQL Wiki",
         "base_url": "https://wiki.postgresql.org",
         "blog_url": "https://wiki.postgresql.org/wiki/Category:Performance",
-        "link_pattern": re.compile(r'/wiki/[\w:]+'),
+        "link_pattern": re.compile(r"/wiki/[\w:]+"),
     },
 }
 
 # Patterns for extracting SQL and EXPLAIN output
 SQL_CODE_PATTERN = re.compile(
-    r'```(?:sql|SQL|postgresql|plpgsql)?\s*\n(.*?)```',
+    r"```(?:sql|SQL|postgresql|plpgsql)?\s*\n(.*?)```",
     re.DOTALL,
 )
 EXPLAIN_PATTERN = re.compile(
-    r'(?:Seq\s+Scan|Index\s+Scan|Index\s+Only\s+Scan|Bitmap\s+Heap\s+Scan|'
-    r'Hash\s+Join|Merge\s+Join|Nested\s+Loop|Sort|HashAggregate|'
-    r'GroupAggregate|Limit)\s+on\s+\w+',
+    r"(?:Seq\s+Scan|Index\s+Scan|Index\s+Only\s+Scan|Bitmap\s+Heap\s+Scan|"
+    r"Hash\s+Join|Merge\s+Join|Nested\s+Loop|Sort|HashAggregate|"
+    r"GroupAggregate|Limit)\s+on\s+\w+",
     re.IGNORECASE,
 )
 EXECUTION_TIME_PATTERN = re.compile(
-    r'(?:Execution\s+Time|Planning\s+Time):\s*([\d.]+)\s*ms',
+    r"(?:Execution\s+Time|Planning\s+Time):\s*([\d.]+)\s*ms",
     re.IGNORECASE,
 )
 INDEX_DDL_PATTERN = re.compile(
-    r'CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(\w+)',
+    r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(\w+)",
     re.IGNORECASE,
 )
 
 # PostgreSQL-specific optimization keywords
 PG_KEYWORDS = [
-    "seq scan", "index scan", "bitmap heap scan",
-    "hash join", "nested loop", "merge join",
-    "explain analyze", "explain (analyze",
-    "execution time", "planning time",
-    "rows removed by filter", "actual rows",
-    "b-tree index", "gin index", "gist index", "brin index",
-    "partial index", "covering index", "index-only scan",
-    "create index", "create index concurrently",
-    "analyze", "vacuum analyze",
-    "pg_stat_statements", "auto_explain",
-    "work_mem", "shared_buffers", "effective_cache_size",
-    "row estimation", "statistics", "pg_stats",
-    "ctid", "heap fetch", "lossy",
-    "n+1 query", "n+1",
+    "seq scan",
+    "index scan",
+    "bitmap heap scan",
+    "hash join",
+    "nested loop",
+    "merge join",
+    "explain analyze",
+    "explain (analyze",
+    "execution time",
+    "planning time",
+    "rows removed by filter",
+    "actual rows",
+    "b-tree index",
+    "gin index",
+    "gist index",
+    "brin index",
+    "partial index",
+    "covering index",
+    "index-only scan",
+    "create index",
+    "create index concurrently",
+    "analyze",
+    "vacuum analyze",
+    "pg_stat_statements",
+    "auto_explain",
+    "work_mem",
+    "shared_buffers",
+    "effective_cache_size",
+    "row estimation",
+    "statistics",
+    "pg_stats",
+    "ctid",
+    "heap fetch",
+    "lossy",
+    "n+1 query",
+    "n+1",
 ]
 
 
 @dataclass
 class QueryPattern:
     """A single query optimization pattern."""
-    pattern_type: str              # missing_index | seq_scan | n_plus_1 | join_order | etc.
+
+    pattern_type: str  # missing_index | seq_scan | n_plus_1 | join_order | etc.
     before_sql: str
     after_sql: str
     diagnosis: str
@@ -132,6 +156,7 @@ class QueryPattern:
 @dataclass
 class PGBlogPost:
     """A PostgreSQL optimization blog post with extracted patterns."""
+
     post_id: str
     source: str
     source_name: str
@@ -154,8 +179,8 @@ def html_to_text(html: str) -> str:
         for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
             tag.decompose()
         return soup.get_text(separator="\n", strip=True)
-    text = re.sub(r'<[^>]+>', ' ', html)
-    return re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"<[^>]+>", " ", html)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def extract_links(html: str, base_url: str, pattern: re.Pattern) -> list[str]:
@@ -188,8 +213,8 @@ def extract_title(html: str) -> str:
         h1 = soup.find("h1")
         if h1:
             return h1.get_text().strip()
-    m = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE | re.DOTALL)
-    return re.sub(r'\s+', ' ', m.group(1)).strip() if m else ""
+    m = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    return re.sub(r"\s+", " ", m.group(1)).strip() if m else ""
 
 
 def score_relevance(text: str) -> tuple[float, bool, bool, list[str]]:
@@ -208,9 +233,9 @@ def score_relevance(text: str) -> tuple[float, bool, bool, list[str]]:
             index_types.append(itype)
 
     score = (
-        keyword_score * 0.5 +
-        (0.25 if has_explain else 0) +
-        (0.25 if has_numbers else 0)
+        keyword_score * 0.5
+        + (0.25 if has_explain else 0)
+        + (0.25 if has_numbers else 0)
     )
 
     return round(min(1.0, score), 3), has_explain, has_numbers, index_types
@@ -226,7 +251,7 @@ def extract_patterns(text: str) -> list[dict]:
     # Find execution times
     times = []
     for m in EXECUTION_TIME_PATTERN.finditer(text):
-        context = text[max(0, m.start() - 50):m.start()].lower()
+        context = text[max(0, m.start() - 50) : m.start()].lower()
         label = "before" if "before" in context or "slow" in context else "after"
         times.append((label, float(m.group(1))))
 
@@ -251,13 +276,15 @@ def extract_patterns(text: str) -> list[dict]:
             index_ddl = m.group(0)
             break
 
-        patterns.append({
-            "pattern_type": pattern_type,
-            "before_sql": before_sql,
-            "after_sql": after_sql,
-            "diagnosis": "",
-            "index_ddl": index_ddl,
-        })
+        patterns.append(
+            {
+                "pattern_type": pattern_type,
+                "before_sql": before_sql,
+                "after_sql": after_sql,
+                "diagnosis": "",
+                "index_ddl": index_ddl,
+            }
+        )
 
     return patterns[:5]  # Cap at 5 patterns per post
 
@@ -291,7 +318,9 @@ class PGAnalyzePatternHarvester:
             try:
                 headers = {"User-Agent": "Mozilla/5.0 (QueryMedic Research)"}
                 async with session.get(
-                    url, headers=headers, timeout=aiohttp.ClientTimeout(total=30),
+                    url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=30),
                     allow_redirects=True,
                 ) as resp:
                     if resp.status == 200:
@@ -302,7 +331,7 @@ class PGAnalyzePatternHarvester:
                         return None
             except Exception as e:
                 logger.debug(f"Fetch error {url}: {e}")
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
         return None
 
     async def _scrape_post(
@@ -335,7 +364,7 @@ class PGAnalyzePatternHarvester:
             explain_outputs = [
                 m.group(0)[:500]
                 for m in re.finditer(
-                    r'(?:Seq Scan|Index Scan|Bitmap Heap Scan)[^\n]*\n(?:[^\n]+\n){0,10}',
+                    r"(?:Seq Scan|Index Scan|Bitmap Heap Scan)[^\n]*\n(?:[^\n]+\n){0,10}",
                     content,
                 )
             ][:5]
@@ -379,14 +408,15 @@ class PGAnalyzePatternHarvester:
 
         links = extract_links(html, config["base_url"], config["link_pattern"])
         # Filter to unique absolute URLs
-        links = list(set(
-            l if l.startswith("http") else config["base_url"] + l
-            for l in links
-        ))
+        links = list(
+            set(l if l.startswith("http") else config["base_url"] + l for l in links)
+        )
 
         logger.info(f"  {source_key}: {len(links)} post links found")
 
-        tasks = [self._scrape_post(session, url, source_key, output_file) for url in links]
+        tasks = [
+            self._scrape_post(session, url, source_key, output_file) for url in links
+        ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         saved = sum(1 for r in results if r is True)
         logger.info(f"  {source_key}: {saved}/{len(links)} posts saved")
@@ -415,12 +445,16 @@ class PGAnalyzePatternHarvester:
 if __name__ == "__main__":
     import argparse
     from dotenv import load_dotenv
+
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Harvest PostgreSQL optimization patterns from blogs")
+    parser = argparse.ArgumentParser(
+        description="Harvest PostgreSQL optimization patterns from blogs"
+    )
     parser.add_argument("--all", action="store_true")
-    parser.add_argument("--sources", nargs="+", default=None,
-                        choices=list(BLOG_SOURCES.keys()))
+    parser.add_argument(
+        "--sources", nargs="+", default=None, choices=list(BLOG_SOURCES.keys())
+    )
     parser.add_argument("--output-dir", default="data/raw/pg_patterns")
     parser.add_argument("--workers", type=int, default=5)
     args = parser.parse_args()

@@ -21,7 +21,7 @@ import hashlib
 import json
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
@@ -32,13 +32,44 @@ from loguru import logger
 OUTPUT_DIR = Path(__file__).parents[1] / "data" / "raw" / "blogs"
 
 DB_KEYWORDS = [
-    "index", "query", "explain", "execution plan", "sequential scan", "index scan",
-    "performance", "optimization", "slow query", "vacuum", "analyze", "statistics",
-    "gin", "gist", "btree", "brin", "covering index", "partial index",
-    "write amplification", "write ahead log", "wal", "mvcc", "bloat",
-    "connection pool", "pg_stat", "pg_statio", "autovacuum", "toast",
-    "partitioning", "sharding", "replication", "foreign key",
-    "n+1", "orm", "join", "hash join", "nested loop", "merge join",
+    "index",
+    "query",
+    "explain",
+    "execution plan",
+    "sequential scan",
+    "index scan",
+    "performance",
+    "optimization",
+    "slow query",
+    "vacuum",
+    "analyze",
+    "statistics",
+    "gin",
+    "gist",
+    "btree",
+    "brin",
+    "covering index",
+    "partial index",
+    "write amplification",
+    "write ahead log",
+    "wal",
+    "mvcc",
+    "bloat",
+    "connection pool",
+    "pg_stat",
+    "pg_statio",
+    "autovacuum",
+    "toast",
+    "partitioning",
+    "sharding",
+    "replication",
+    "foreign key",
+    "n+1",
+    "orm",
+    "join",
+    "hash join",
+    "nested loop",
+    "merge join",
 ]
 
 
@@ -144,15 +175,26 @@ class DBBlogCrawler:
             if url in visited:
                 return url, None
             visited.add(url)
-            headers = {"User-Agent": "Mozilla/5.0 (research bot; github.com/calebnewtonusc/querymedic)"}
+            headers = {
+                "User-Agent": "Mozilla/5.0 (research bot; github.com/calebnewtonusc/querymedic)"
+            }
             await asyncio.sleep(0.8)
             try:
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as r:
-                    return url, await r.text(errors="replace") if r.status == 200 else None
+                async with session.get(
+                    url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)
+                ) as r:
+                    return url, await r.text(
+                        errors="replace"
+                    ) if r.status == 200 else None
             except Exception:
                 return url, None
 
-    async def _crawl_source(self, source: DBBlogSource, session: aiohttp.ClientSession, sem: asyncio.Semaphore) -> int:
+    async def _crawl_source(
+        self,
+        source: DBBlogSource,
+        session: aiohttp.ClientSession,
+        sem: asyncio.Semaphore,
+    ) -> int:
         saved = 0
         visited: set[str] = set()
         to_crawl = list(source.index_urls)
@@ -160,9 +202,9 @@ class DBBlogCrawler:
         while to_crawl:
             batch, to_crawl = to_crawl[:5], to_crawl[5:]
 
-            results = await asyncio.gather(*[
-                self._fetch_url(u, session, sem, visited) for u in batch
-            ])
+            results = await asyncio.gather(
+                *[self._fetch_url(u, session, sem, visited) for u in batch]
+            )
 
             for url, html in results:
                 if not html:
@@ -180,15 +222,21 @@ class DBBlogCrawler:
                 filename = self._url_to_filename(url)
                 out_path = self.output_dir / filename
                 if not out_path.exists():
-                    out_path.write_text(json.dumps({
-                        "source": source.name,
-                        "engine": source.engine,
-                        "url": url,
-                        "title": str(title),
-                        "text": content,
-                        "word_count": len(content.split()),
-                        "crawled_at": time.time(),
-                    }, ensure_ascii=False, indent=2))
+                    out_path.write_text(
+                        json.dumps(
+                            {
+                                "source": source.name,
+                                "engine": source.engine,
+                                "url": url,
+                                "title": str(title),
+                                "text": content,
+                                "word_count": len(content.split()),
+                                "crawled_at": time.time(),
+                            },
+                            ensure_ascii=False,
+                            indent=2,
+                        )
+                    )
                     saved += 1
 
                 if url in source.index_urls:
@@ -196,8 +244,14 @@ class DBBlogCrawler:
                     for a in soup.find_all("a", href=True):
                         href = urljoin(source.base_url, a["href"])
                         parsed = urlparse(href)
-                        if parsed.netloc == domain and href not in visited and href not in to_crawl:
-                            to_crawl.append(f"{parsed.scheme}://{parsed.netloc}{parsed.path}")
+                        if (
+                            parsed.netloc == domain
+                            and href not in visited
+                            and href not in to_crawl
+                        ):
+                            to_crawl.append(
+                                f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+                            )
 
         logger.info(f"  {source.name}: {saved} posts saved")
         return saved
@@ -210,7 +264,9 @@ class DBBlogCrawler:
         sem = asyncio.Semaphore(self.max_concurrent)
         connector = aiohttp.TCPConnector(limit=10, limit_per_host=2)
         async with aiohttp.ClientSession(connector=connector) as session:
-            counts = await asyncio.gather(*[self._crawl_source(s, session, sem) for s in sources])
+            counts = await asyncio.gather(
+                *[self._crawl_source(s, session, sem) for s in sources]
+            )
         total = sum(counts)
         logger.success(f"DB blog crawl complete: {total} posts saved")
         return total
@@ -218,6 +274,7 @@ class DBBlogCrawler:
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--source", nargs="+")

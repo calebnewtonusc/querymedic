@@ -25,7 +25,10 @@ OUTPUT_DIR = Path(__file__).parents[1] / "data" / "raw" / "explain_plans"
 # Regex patterns for EXPLAIN ANALYZE detection
 EXPLAIN_PATTERNS = [
     # PostgreSQL
-    re.compile(r"((?:Seq Scan|Index Scan|Index Only Scan|Bitmap Heap Scan|Hash Join|Merge Join|Nested Loop|Sort|Aggregate|Hash|Limit|CTE Scan).*?\(cost=[\d.]+\.\.[\d.]+ rows=\d+ width=\d+\).*?actual time=[\d.]+\.\.[\d.]+ rows=\d+ loops=\d+)", re.DOTALL),
+    re.compile(
+        r"((?:Seq Scan|Index Scan|Index Only Scan|Bitmap Heap Scan|Hash Join|Merge Join|Nested Loop|Sort|Aggregate|Hash|Limit|CTE Scan).*?\(cost=[\d.]+\.\.[\d.]+ rows=\d+ width=\d+\).*?actual time=[\d.]+\.\.[\d.]+ rows=\d+ loops=\d+)",
+        re.DOTALL,
+    ),
     # MySQL EXPLAIN
     re.compile(r"(\|\s*\d+\s*\|\s*\w+\s*\|\s*\w+\s*\|.*?\|)", re.DOTALL),
 ]
@@ -43,7 +46,9 @@ class ExplainPlanCorpus:
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()
-        self.session.headers["User-Agent"] = "Mozilla/5.0 (research bot; github.com/calebnewtonusc/querymedic)"
+        self.session.headers["User-Agent"] = (
+            "Mozilla/5.0 (research bot; github.com/calebnewtonusc/querymedic)"
+        )
 
     def collect_depesz(self, limit: int = 2000) -> int:
         """
@@ -66,19 +71,29 @@ class ExplainPlanCorpus:
 
                 html = resp.text
                 # Extract the plan text from the page
-                plan_match = re.search(r'<pre[^>]*class="[^"]*plan[^"]*"[^>]*>(.*?)</pre>', html, re.DOTALL)
+                plan_match = re.search(
+                    r'<pre[^>]*class="[^"]*plan[^"]*"[^>]*>(.*?)</pre>', html, re.DOTALL
+                )
                 if not plan_match:
                     continue
 
                 plan_text = plan_match.group(1)
                 # Clean HTML entities
-                plan_text = plan_text.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+                plan_text = (
+                    plan_text.replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .replace("&amp;", "&")
+                )
 
                 if len(plan_text) < 100:
                     continue
 
                 # Extract query if present
-                query_match = re.search(r'<pre[^>]*class="[^"]*query[^"]*"[^>]*>(.*?)</pre>', html, re.DOTALL)
+                query_match = re.search(
+                    r'<pre[^>]*class="[^"]*query[^"]*"[^>]*>(.*?)</pre>',
+                    html,
+                    re.DOTALL,
+                )
                 query = query_match.group(1) if query_match else None
 
                 record = {
@@ -116,30 +131,44 @@ class ExplainPlanCorpus:
             except json.JSONDecodeError:
                 continue
 
-            combined_text = data.get("body", "") + data.get("best_answer", {}).get("body", "")
+            combined_text = data.get("body", "") + data.get("best_answer", {}).get(
+                "body", ""
+            )
 
             # Find EXPLAIN ANALYZE blocks
             explain_blocks = []
             # HTML code blocks
             code_blocks = re.findall(r"<code>(.*?)</code>", combined_text, re.DOTALL)
             for block in code_blocks:
-                if EXPLAIN_HEADER.search(block) or "Seq Scan" in block or "Index Scan" in block:
+                if (
+                    EXPLAIN_HEADER.search(block)
+                    or "Seq Scan" in block
+                    or "Index Scan" in block
+                ):
                     explain_blocks.append(block)
 
             if not explain_blocks:
                 continue
 
             for i, block in enumerate(explain_blocks[:3]):
-                out_path = self.output_dir / f"so_extract_{data['question_id']}_{i}.json"
+                out_path = (
+                    self.output_dir / f"so_extract_{data['question_id']}_{i}.json"
+                )
                 if not out_path.exists():
-                    out_path.write_text(json.dumps({
-                        "source": "stackoverflow_extract",
-                        "question_id": data["question_id"],
-                        "plan": block,
-                        "engine": data.get("engine", "postgresql"),
-                        "title": data.get("title", ""),
-                        "extracted_at": time.time(),
-                    }, ensure_ascii=False, indent=2))
+                    out_path.write_text(
+                        json.dumps(
+                            {
+                                "source": "stackoverflow_extract",
+                                "question_id": data["question_id"],
+                                "plan": block,
+                                "engine": data.get("engine", "postgresql"),
+                                "title": data.get("title", ""),
+                                "extracted_at": time.time(),
+                            },
+                            ensure_ascii=False,
+                            indent=2,
+                        )
+                    )
                     saved += 1
 
         logger.info(f"  SO extract: {saved} EXPLAIN blocks extracted")
@@ -155,6 +184,7 @@ class ExplainPlanCorpus:
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--source", choices=["depesz", "stackoverflow"])

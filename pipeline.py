@@ -11,7 +11,6 @@ Usage:
 
 import argparse
 import json
-import subprocess
 from pathlib import Path
 
 from loguru import logger
@@ -28,18 +27,21 @@ def run_collection() -> int:
     logger.info("=== COLLECTION PHASE ===")
 
     from discovery.dba_stackexchange import DBAStackExchangeHarvester
+
     harvester = DBAStackExchangeHarvester(output_dir=RAW_DIR / "stackexchange")
     n = harvester.fetch_all(min_score=10)
     logger.info(f"  DBA Stack Exchange: {n} Q&A pairs")
     total += n
 
     from discovery.db_blog_crawler import DBBlogCrawler
+
     crawler = DBBlogCrawler(output_dir=RAW_DIR / "blogs")
     n = crawler.crawl_all()
     logger.info(f"  DB engineering blogs: {n} posts")
     total += n
 
     from discovery.explain_plan_corpus import ExplainPlanCorpus
+
     corpus = ExplainPlanCorpus(output_dir=RAW_DIR / "explain_plans")
     n = corpus.collect_all()
     logger.info(f"  EXPLAIN plan pairs: {n} pairs")
@@ -52,6 +54,7 @@ def run_collection() -> int:
 def run_synthesis(backend: str = "claude", vllm_urls: list[str] | None = None) -> int:
     logger.info("=== SYNTHESIS PHASE ===")
     from synthesis.synthesize_bulk import SynthesisPipeline
+
     pipeline = SynthesisPipeline(backend=backend, vllm_urls=vllm_urls or [])
     return pipeline.run_all()
 
@@ -111,6 +114,7 @@ def main() -> None:
                 )
             model = str(checkpoints[-1])
         from evaluation.querybench import QueryBench
+
         bench = QueryBench(model_path=model)
         bench.run()
     elif args.collect_only:

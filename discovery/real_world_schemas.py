@@ -293,13 +293,21 @@ class SchemaRecord:
 def detect_database_type(ddl: str) -> str:
     """Detect database type from DDL content."""
     ddl_lower = ddl.lower()
-    if any(kw in ddl_lower for kw in ["serial", "bigserial", "bytea", "timestamptz", "jsonb", "pg_"]):
+    if any(
+        kw in ddl_lower
+        for kw in ["serial", "bigserial", "bytea", "timestamptz", "jsonb", "pg_"]
+    ):
         return "postgresql"
-    if any(kw in ddl_lower for kw in ["auto_increment", "engine=innodb", "tinyint", "mediumint"]):
+    if any(
+        kw in ddl_lower
+        for kw in ["auto_increment", "engine=innodb", "tinyint", "mediumint"]
+    ):
         return "mysql"
     if any(kw in ddl_lower for kw in ["autoincrement", "sqlite_sequence"]):
         return "sqlite"
-    if "go.sum" in ddl_lower or any(kw in ddl_lower for kw in ["nvarchar", "datetime2", "uniqueidentifier"]):
+    if "go.sum" in ddl_lower or any(
+        kw in ddl_lower for kw in ["nvarchar", "datetime2", "uniqueidentifier"]
+    ):
         return "mssql"
     # QM-16: Return "unknown" instead of assuming "postgresql" for DDL that
     # does not match any known dialect. Callers can handle "unknown" explicitly
@@ -346,7 +354,10 @@ def parse_schema_ddl(ddl: str) -> list[dict]:
             if INDEX_IN_TABLE_PATTERN.search(line):
                 indexes.append(line[:200])
                 continue
-            if any(kw in line.upper() for kw in ["CONSTRAINT", "CHECK", "FOREIGN KEY", "REFERENCES"]):
+            if any(
+                kw in line.upper()
+                for kw in ["CONSTRAINT", "CHECK", "FOREIGN KEY", "REFERENCES"]
+            ):
                 constraints.append(line[:200])
                 continue
 
@@ -359,12 +370,14 @@ def parse_schema_ddl(ddl: str) -> list[dict]:
                 nullable = "not null" not in rest
                 default_m = re.search(r"default\s+(\S+)", rest, re.IGNORECASE)
                 default = default_m.group(1) if default_m else None
-                columns.append({
-                    "name": col_name,
-                    "data_type": col_type,
-                    "nullable": nullable,
-                    "default": default,
-                })
+                columns.append(
+                    {
+                        "name": col_name,
+                        "data_type": col_type,
+                        "nullable": nullable,
+                        "default": default,
+                    }
+                )
 
         # Collect standalone CREATE INDEX statements referencing this table
         for idx_m in STANDALONE_INDEX_PATTERN.finditer(ddl):
@@ -372,12 +385,14 @@ def parse_schema_ddl(ddl: str) -> list[dict]:
                 indexes.append(idx_m.group(0)[:300])
 
         if columns or indexes:  # Only include tables with parseable content
-            tables.append({
-                "name": table_name,
-                "columns": columns,
-                "indexes": indexes[:20],
-                "constraints": constraints[:10],
-            })
+            tables.append(
+                {
+                    "name": table_name,
+                    "columns": columns,
+                    "indexes": indexes[:20],
+                    "constraints": constraints[:10],
+                }
+            )
 
     return tables[:200]  # Cap at 200 tables
 
@@ -406,7 +421,9 @@ class RealWorldSchemaHarvester:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         raw_token = os.environ.get("GITHUB_TOKEN", "")
-        self.tokens = tokens or ([t for t in raw_token.split(",") if t] if raw_token else [])
+        self.tokens = tokens or (
+            [t for t in raw_token.split(",") if t] if raw_token else []
+        )
         self._token_idx = 0
         self._semaphore = asyncio.Semaphore(workers)
         self._stats = {"fetched": 0, "saved": 0, "errors": 0}
@@ -430,7 +447,11 @@ class RealWorldSchemaHarvester:
         for attempt in range(3):
             await asyncio.sleep(self.REQUEST_DELAY)
             try:
-                headers = self._auth_headers() if is_api else {"User-Agent": "QueryMedic-Schema-Harvester/1.0"}
+                headers = (
+                    self._auth_headers()
+                    if is_api
+                    else {"User-Agent": "QueryMedic-Schema-Harvester/1.0"}
+                )
                 async with session.get(
                     url,
                     headers=headers,
@@ -438,7 +459,9 @@ class RealWorldSchemaHarvester:
                 ) as resp:
                     remaining = int(resp.headers.get("X-RateLimit-Remaining", 99))
                     if remaining < 5:
-                        reset_at = int(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
+                        reset_at = int(
+                            resp.headers.get("X-RateLimit-Reset", time.time() + 60)
+                        )
                         wait = max(1, reset_at - time.time() + 2)
                         await asyncio.sleep(wait)
 
@@ -450,7 +473,7 @@ class RealWorldSchemaHarvester:
                         return None
             except Exception as e:
                 logger.debug(f"Fetch error {url}: {e}")
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
         return None
 
     async def _save_schema(
@@ -531,9 +554,13 @@ class RealWorldSchemaHarvester:
                         if not isinstance(items, list):
                             continue
                         sql_files = [
-                            it["path"] for it in items
+                            it["path"]
+                            for it in items
                             if it.get("type") == "file"
-                            and (it["name"].endswith(".sql") or "migration" in it["name"].lower())
+                            and (
+                                it["name"].endswith(".sql")
+                                or "migration" in it["name"].lower()
+                            )
                         ][:20]
                     except (json.JSONDecodeError, KeyError):
                         continue
@@ -595,7 +622,9 @@ class RealWorldSchemaHarvester:
                     ) as resp:
                         remaining = int(resp.headers.get("X-RateLimit-Remaining", 5))
                         if remaining < 3:
-                            reset_at = int(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
+                            reset_at = int(
+                                resp.headers.get("X-RateLimit-Reset", time.time() + 60)
+                            )
                             await asyncio.sleep(max(5, reset_at - time.time() + 2))
 
                         if resp.status != 200:
@@ -610,9 +639,11 @@ class RealWorldSchemaHarvester:
                     break
 
                 for item in items:
-                    raw_url = item.get("html_url", "").replace(
-                        "github.com", "raw.githubusercontent.com"
-                    ).replace("/blob/", "/")
+                    raw_url = (
+                        item.get("html_url", "")
+                        .replace("github.com", "raw.githubusercontent.com")
+                        .replace("/blob/", "/")
+                    )
                     repo_name = item.get("repository", {}).get("full_name", "unknown")
                     file_path = item.get("path", "")
                     file_url = item.get("html_url", "")
@@ -660,7 +691,9 @@ class RealWorldSchemaHarvester:
 
             if include_search:
                 logger.info("Harvesting via GitHub code search...")
-                n = await self._harvest_github_search(session, output_file, search_limit)
+                n = await self._harvest_github_search(
+                    session, output_file, search_limit
+                )
                 total += n
                 logger.info(f"GitHub search: {n} schemas saved")
 
@@ -701,23 +734,35 @@ def build_schema_stats(data_dir: Path = OUTPUT_DIR) -> None:
 
     print(f"Total schemas: {total:,}")
     print(f"Total tables: {table_count:,}")
-    print(f"Schemas with indexes: {indexed:,} ({100*indexed/max(total,1):.1f}%)")
-    print(f"Schemas with partial indexes: {partial_indexed:,} ({100*partial_indexed/max(total,1):.1f}%)")
+    print(f"Schemas with indexes: {indexed:,} ({100 * indexed / max(total, 1):.1f}%)")
+    print(
+        f"Schemas with partial indexes: {partial_indexed:,} ({100 * partial_indexed / max(total, 1):.1f}%)"
+    )
     print(f"Database types: {type_counts}")
 
 
 if __name__ == "__main__":
     import argparse
     from dotenv import load_dotenv
+
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Harvest real-world PostgreSQL schemas")
+    parser = argparse.ArgumentParser(
+        description="Harvest real-world PostgreSQL schemas"
+    )
     parser.add_argument("--all", action="store_true", help="Harvest from all sources")
-    parser.add_argument("--sources", nargs="+",
-                        choices=["known_projects", "github_search"],
-                        help="Specific sources to harvest")
-    parser.add_argument("--search-limit", type=int, default=1000,
-                        help="Max schemas from GitHub code search")
+    parser.add_argument(
+        "--sources",
+        nargs="+",
+        choices=["known_projects", "github_search"],
+        help="Specific sources to harvest",
+    )
+    parser.add_argument(
+        "--search-limit",
+        type=int,
+        default=1000,
+        help="Max schemas from GitHub code search",
+    )
     parser.add_argument("--output-dir", default=str(OUTPUT_DIR))
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--stats", action="store_true", help="Print schema statistics")
@@ -737,9 +782,11 @@ if __name__ == "__main__":
         output_dir=Path(args.output_dir),
         workers=args.workers,
     )
-    n = asyncio.run(harvester.harvest_all(
-        include_known=include_known,
-        include_search=include_search,
-        search_limit=args.search_limit,
-    ))
+    n = asyncio.run(
+        harvester.harvest_all(
+            include_known=include_known,
+            include_search=include_search,
+            search_limit=args.search_limit,
+        )
+    )
     print(f"\nTotal schemas harvested: {n:,}")

@@ -45,13 +45,27 @@ OUTPUT_DIR = Path(__file__).parents[1] / "data" / "raw" / "query_corpus"
 
 # SQL keywords that signal a slow query question
 SLOW_QUERY_SIGNALS = [
-    r"slow\s+query", r"query\s+slow", r"performance\s+issue", r"taking\s+too\s+long",
-    r"seq\s+scan", r"sequential\s+scan", r"full\s+table\s+scan",
-    r"explain\s+analyze", r"explain\s+plan", r"query\s+plan",
-    r"missing\s+index", r"add\s+an?\s+index", r"create\s+index",
-    r"n\+1", r"n\s*\+\s*1\s+query",
-    r"join\s+is\s+slow", r"hash\s+join", r"nested\s+loop",
-    r"timeout", r"1[0-9]{3,}\s*ms", r"seconds\s+to\s+execute",
+    r"slow\s+query",
+    r"query\s+slow",
+    r"performance\s+issue",
+    r"taking\s+too\s+long",
+    r"seq\s+scan",
+    r"sequential\s+scan",
+    r"full\s+table\s+scan",
+    r"explain\s+analyze",
+    r"explain\s+plan",
+    r"query\s+plan",
+    r"missing\s+index",
+    r"add\s+an?\s+index",
+    r"create\s+index",
+    r"n\+1",
+    r"n\s*\+\s*1\s+query",
+    r"join\s+is\s+slow",
+    r"hash\s+join",
+    r"nested\s+loop",
+    r"timeout",
+    r"1[0-9]{3,}\s*ms",
+    r"seconds\s+to\s+execute",
 ]
 SLOW_SIGNAL_PATTERN = re.compile("|".join(SLOW_QUERY_SIGNALS), re.IGNORECASE)
 
@@ -104,7 +118,12 @@ class StackExchangeCollector:
     """
 
     SITE_TAGS = {
-        "stackoverflow": ["postgresql", "postgresql-performance", "query-optimization", "sql-performance"],
+        "stackoverflow": [
+            "postgresql",
+            "postgresql-performance",
+            "query-optimization",
+            "sql-performance",
+        ],
         "dba": ["postgresql", "query-performance", "index", "explain"],
     }
 
@@ -121,12 +140,20 @@ class StackExchangeCollector:
         """Extract SQL code blocks from markdown/HTML text."""
         blocks = []
         # Fenced code blocks
-        for match in re.finditer(r"```(?:sql|postgresql|postgres|pgsql)?\n(.*?)```", text, re.DOTALL | re.IGNORECASE):
+        for match in re.finditer(
+            r"```(?:sql|postgresql|postgres|pgsql)?\n(.*?)```",
+            text,
+            re.DOTALL | re.IGNORECASE,
+        ):
             blocks.append(match.group(1).strip())
         # Inline code with SQL keywords
         for match in re.finditer(r"`([^`]{20,})`", text):
             content = match.group(1)
-            if re.search(r"\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE|EXPLAIN)\b", content, re.IGNORECASE):
+            if re.search(
+                r"\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE|EXPLAIN)\b",
+                content,
+                re.IGNORECASE,
+            ):
                 blocks.append(content.strip())
         return blocks
 
@@ -172,7 +199,9 @@ class StackExchangeCollector:
         # Find the accepted answer (or highest-voted)
         accepted = next((a for a in answers if a.get("is_accepted")), None)
         if not accepted:
-            answers_sorted = sorted(answers, key=lambda a: a.get("score", 0), reverse=True)
+            answers_sorted = sorted(
+                answers, key=lambda a: a.get("score", 0), reverse=True
+            )
             accepted = answers_sorted[0] if answers_sorted else None
         if not accepted or accepted.get("score", 0) < 1:
             return None
@@ -199,7 +228,9 @@ class StackExchangeCollector:
         diagnosis = a_paragraphs[0][:500] if a_paragraphs else ""
 
         # Schema: look for CREATE TABLE statements in the question
-        schema_matches = re.findall(r"CREATE\s+TABLE\s+.*?;", q_body, re.DOTALL | re.IGNORECASE)
+        schema_matches = re.findall(
+            r"CREATE\s+TABLE\s+.*?;", q_body, re.DOTALL | re.IGNORECASE
+        )
         schema = "\n\n".join(schema_matches[:3])[:2000] if schema_matches else ""
 
         return QueryRecord(
@@ -223,7 +254,9 @@ class StackExchangeCollector:
     def collect(self, site: str = "stackoverflow", limit: int = 2000) -> int:
         """Collect slow-query Q&A from a Stack Exchange site."""
         if site not in self.SITE_TAGS:
-            raise ValueError(f"Unknown site: {site}. Choose from {list(self.SITE_TAGS)}")
+            raise ValueError(
+                f"Unknown site: {site}. Choose from {list(self.SITE_TAGS)}"
+            )
 
         api = StackAPI(site)
         if self.api_key:
@@ -331,7 +364,9 @@ class PgActivityCrawler:
         try:
             async with session.get(
                 url,
-                headers={"User-Agent": "QueryMedic-Research/1.0 (github.com/calebnewtonusc/querymedic)"},
+                headers={
+                    "User-Agent": "QueryMedic-Research/1.0 (github.com/calebnewtonusc/querymedic)"
+                },
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
                 if resp.status == 200:
@@ -340,7 +375,9 @@ class PgActivityCrawler:
             logger.debug(f"Failed to fetch {url}: {e}")
         return None
 
-    def _extract_query_content(self, html: str, source_name: str) -> Optional[QueryRecord]:
+    def _extract_query_content(
+        self, html: str, source_name: str
+    ) -> Optional[QueryRecord]:
         """Extract query optimization content from a blog post or wiki page."""
         soup = BeautifulSoup(html, "lxml")
 
@@ -367,7 +404,9 @@ class PgActivityCrawler:
         sql_blocks = []
         for code_el in content_el.find_all(["code", "pre"]):
             code_text = code_el.get_text(strip=True)
-            if re.search(r"\b(?:SELECT|EXPLAIN|CREATE\s+INDEX)\b", code_text, re.IGNORECASE):
+            if re.search(
+                r"\b(?:SELECT|EXPLAIN|CREATE\s+INDEX)\b", code_text, re.IGNORECASE
+            ):
                 sql_blocks.append(code_text[:1500])
 
         if not sql_blocks:
@@ -375,8 +414,12 @@ class PgActivityCrawler:
 
         # Classify blocks as EXPLAIN output vs SQL vs DDL
         explain_plans = [b for b in sql_blocks if re.search(r"cost=[\d.]+\.\.", b)]
-        sql_queries = [b for b in sql_blocks if re.search(r"\bSELECT\b", b, re.IGNORECASE)]
-        ddl = [b for b in sql_blocks if re.search(r"\bCREATE\s+INDEX\b", b, re.IGNORECASE)]
+        sql_queries = [
+            b for b in sql_blocks if re.search(r"\bSELECT\b", b, re.IGNORECASE)
+        ]
+        ddl = [
+            b for b in sql_blocks if re.search(r"\bCREATE\s+INDEX\b", b, re.IGNORECASE)
+        ]
 
         if not explain_plans and not sql_queries:
             return None
@@ -388,7 +431,11 @@ class PgActivityCrawler:
         optimized_query = sql_queries[-1] if len(sql_queries) > 1 else ""
 
         # Extract diagnosis from first few paragraphs
-        paras = [p.get_text(strip=True) for p in content_el.find_all("p") if len(p.get_text(strip=True)) > 50]
+        paras = [
+            p.get_text(strip=True)
+            for p in content_el.find_all("p")
+            if len(p.get_text(strip=True)) > 50
+        ]
         diagnosis = " ".join(paras[:3])[:800] if paras else ""
 
         return QueryRecord(
@@ -499,7 +546,9 @@ def build_training_pairs(
     with open(output_path, "w") as out_f:
         for record in stream_all_records(data_dir):
             # Quality filters
-            if record.get("score", 0) < min_score and record.get("source", "").startswith("stackexchange"):
+            if record.get("score", 0) < min_score and record.get(
+                "source", ""
+            ).startswith("stackexchange"):
                 continue
             if require_explain and not record.get("has_explain_before"):
                 continue
@@ -513,7 +562,9 @@ def build_training_pairs(
             if record.get("schema"):
                 user_parts.append(f"Schema:\n```sql\n{record['schema']}\n```")
             if record.get("explain_before"):
-                user_parts.append(f"EXPLAIN ANALYZE output:\n```\n{record['explain_before']}\n```")
+                user_parts.append(
+                    f"EXPLAIN ANALYZE output:\n```\n{record['explain_before']}\n```"
+                )
 
             if not user_parts:
                 continue
@@ -522,18 +573,27 @@ def build_training_pairs(
             if record.get("diagnosis"):
                 assistant_parts.append(f"**Diagnosis:** {record['diagnosis']}")
             if record.get("index_ddl"):
-                assistant_parts.append(f"**Recommended index:**\n```sql\n{record['index_ddl']}\n```")
+                assistant_parts.append(
+                    f"**Recommended index:**\n```sql\n{record['index_ddl']}\n```"
+                )
             if record.get("optimized_query"):
-                assistant_parts.append(f"**Optimized query:**\n```sql\n{record['optimized_query']}\n```")
+                assistant_parts.append(
+                    f"**Optimized query:**\n```sql\n{record['optimized_query']}\n```"
+                )
             if record.get("explain_after"):
-                assistant_parts.append(f"**EXPLAIN after optimization:**\n```\n{record['explain_after']}\n```")
+                assistant_parts.append(
+                    f"**EXPLAIN after optimization:**\n```\n{record['explain_after']}\n```"
+                )
 
             if not assistant_parts:
                 continue
 
             example = {
                 "conversations": [
-                    {"role": "system", "content": "You are QueryMedic, a PostgreSQL query optimization specialist."},
+                    {
+                        "role": "system",
+                        "content": "You are QueryMedic, a PostgreSQL query optimization specialist.",
+                    },
                     {"role": "user", "content": "\n\n".join(user_parts)},
                     {"role": "assistant", "content": "\n\n".join(assistant_parts)},
                 ],
@@ -559,12 +619,31 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Build PostgreSQL query optimization corpus.")
+    parser = argparse.ArgumentParser(
+        description="Build PostgreSQL query optimization corpus."
+    )
     parser.add_argument("--all", action="store_true", help="Collect from all sources")
-    parser.add_argument("--source", choices=["stackoverflow", "dba", "pg_activity"], help="Specific source")
-    parser.add_argument("--limit", type=int, default=2000, help="Max records to collect (Stack Exchange)")
-    parser.add_argument("--build-pairs", action="store_true", help="Build SFT training pairs from existing data")
-    parser.add_argument("--require-explain", action="store_true", help="Only include records with EXPLAIN output")
+    parser.add_argument(
+        "--source",
+        choices=["stackoverflow", "dba", "pg_activity"],
+        help="Specific source",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=2000,
+        help="Max records to collect (Stack Exchange)",
+    )
+    parser.add_argument(
+        "--build-pairs",
+        action="store_true",
+        help="Build SFT training pairs from existing data",
+    )
+    parser.add_argument(
+        "--require-explain",
+        action="store_true",
+        help="Only include records with EXPLAIN output",
+    )
     parser.add_argument("--stats", action="store_true", help="Print corpus statistics")
     args = parser.parse_args()
 
@@ -577,8 +656,12 @@ if __name__ == "__main__":
             if record.get("slow_query"):
                 with_sql += 1
         print(f"Total records: {total:,}")
-        print(f"With EXPLAIN before: {with_explain:,} ({100*with_explain/max(total,1):.1f}%)")
-        print(f"With slow query SQL: {with_sql:,} ({100*with_sql/max(total,1):.1f}%)")
+        print(
+            f"With EXPLAIN before: {with_explain:,} ({100 * with_explain / max(total, 1):.1f}%)"
+        )
+        print(
+            f"With slow query SQL: {with_sql:,} ({100 * with_sql / max(total, 1):.1f}%)"
+        )
         raise SystemExit(0)
 
     if args.build_pairs:

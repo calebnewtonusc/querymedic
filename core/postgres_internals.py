@@ -12,7 +12,6 @@ Reference:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal
 
 
 class IndexType(Enum):
@@ -27,12 +26,13 @@ class IndexType(Enum):
 @dataclass
 class IndexTypeProfile:
     """Complete profile of a PostgreSQL index type."""
+
     name: IndexType
     display_name: str
     supported_operators: list[str]
     best_for: list[str]
     write_cost_factor: float  # relative to B-tree (1.0 = same, >1 = more expensive)
-    storage_factor: float     # relative to B-tree (1.0 = same)
+    storage_factor: float  # relative to B-tree (1.0 = same)
     update_strategy: str
     notes: str
 
@@ -41,7 +41,18 @@ INDEX_PROFILES: dict[IndexType, IndexTypeProfile] = {
     IndexType.BTREE: IndexTypeProfile(
         name=IndexType.BTREE,
         display_name="B-tree (default)",
-        supported_operators=["=", "<", ">", "<=", ">=", "BETWEEN", "IN", "LIKE 'prefix%'", "IS NULL", "ORDER BY"],
+        supported_operators=[
+            "=",
+            "<",
+            ">",
+            "<=",
+            ">=",
+            "BETWEEN",
+            "IN",
+            "LIKE 'prefix%'",
+            "IS NULL",
+            "ORDER BY",
+        ],
         best_for=["equality lookups", "range queries", "ORDER BY", "BETWEEN"],
         write_cost_factor=1.0,
         storage_factor=1.0,
@@ -52,7 +63,12 @@ INDEX_PROFILES: dict[IndexType, IndexTypeProfile] = {
         name=IndexType.GIN,
         display_name="GIN (Generalized Inverted Index)",
         supported_operators=["@>", "?", "?|", "?&", "<@", "@@", "&&"],
-        best_for=["jsonb containment (@>)", "array overlap (&&)", "full-text search (@@)", "tsvector"],
+        best_for=[
+            "jsonb containment (@>)",
+            "array overlap (&&)",
+            "full-text search (@@)",
+            "tsvector",
+        ],
         write_cost_factor=2.5,
         storage_factor=1.5,
         update_strategy="Buffered inserts via pending list (gin_pending_list_limit)",
@@ -62,7 +78,11 @@ INDEX_PROFILES: dict[IndexType, IndexTypeProfile] = {
         name=IndexType.GIST,
         display_name="GiST (Generalized Search Tree)",
         supported_operators=["&&", "@>", "<@", "~=", ">>=", "<<=", "@@"],
-        best_for=["geometric types (PostGIS)", "range types (tsrange, int4range)", "full-text (when GIN not available)"],
+        best_for=[
+            "geometric types (PostGIS)",
+            "range types (tsrange, int4range)",
+            "full-text (when GIN not available)",
+        ],
         write_cost_factor=1.8,
         storage_factor=1.3,
         update_strategy="In-place update (no pending list)",
@@ -72,7 +92,11 @@ INDEX_PROFILES: dict[IndexType, IndexTypeProfile] = {
         name=IndexType.BRIN,
         display_name="BRIN (Block Range Index)",
         supported_operators=["=", "<", ">", "<=", ">=", "BETWEEN"],
-        best_for=["monotonically increasing columns (timestamps, IDs)", "very large tables", "append-only tables"],
+        best_for=[
+            "monotonically increasing columns (timestamps, IDs)",
+            "very large tables",
+            "append-only tables",
+        ],
         write_cost_factor=0.1,
         storage_factor=0.01,
         update_strategy="Summarizes block ranges — updates are cheap",
@@ -82,7 +106,10 @@ INDEX_PROFILES: dict[IndexType, IndexTypeProfile] = {
         name=IndexType.HASH,
         display_name="Hash",
         supported_operators=["="],
-        best_for=["pure equality lookups with no range queries", "very high-cardinality columns"],
+        best_for=[
+            "pure equality lookups with no range queries",
+            "very high-cardinality columns",
+        ],
         write_cost_factor=1.0,
         storage_factor=0.8,
         update_strategy="Hash table page lock",
@@ -92,7 +119,12 @@ INDEX_PROFILES: dict[IndexType, IndexTypeProfile] = {
         name=IndexType.SPGIST,
         display_name="SP-GiST (Space-Partitioned GiST)",
         supported_operators=["=", "<", ">", "<=", ">=", "<<", ">>", "~=", "@>", "<@"],
-        best_for=["non-balanced data structures (quad-trees, k-d trees, radix trees)", "IP/CIDR ranges (inet)", "geometric points", "text prefix lookups"],
+        best_for=[
+            "non-balanced data structures (quad-trees, k-d trees, radix trees)",
+            "IP/CIDR ranges (inet)",
+            "geometric points",
+            "text prefix lookups",
+        ],
         write_cost_factor=1.5,
         storage_factor=1.1,
         update_strategy="In-place update using partitioned space (no pending list)",
@@ -104,6 +136,7 @@ INDEX_PROFILES: dict[IndexType, IndexTypeProfile] = {
 @dataclass
 class IndexRecommendation:
     """A complete index recommendation with rationale."""
+
     index_type: IndexType
     table: str
     columns: list[str]
@@ -148,7 +181,7 @@ class IndexRecommendation:
         if self.partial_predicate:
             effective_cost = base_cost * write_fraction
             return (
-                f"Partial index matches ~{write_fraction*100:.0f}% of rows. "
+                f"Partial index matches ~{write_fraction * 100:.0f}% of rows. "
                 f"Effective write overhead: {effective_cost:.1f}x base (vs {base_cost:.1f}x for full index). "
                 f"Per 100k writes: ~{int(effective_cost * 10)}ms overhead."
             )
@@ -167,11 +200,11 @@ class PlannerKnowledge:
     """
 
     # Cost model constants (default PostgreSQL values)
-    SEQ_PAGE_COST = 1.0      # Cost to read a sequential page
-    RANDOM_PAGE_COST = 4.0   # Cost to read a random page (default, assumes HDD)
-    CPU_TUPLE_COST = 0.01    # Cost per row processed
+    SEQ_PAGE_COST = 1.0  # Cost to read a sequential page
+    RANDOM_PAGE_COST = 4.0  # Cost to read a random page (default, assumes HDD)
+    CPU_TUPLE_COST = 0.01  # Cost per row processed
     CPU_INDEX_TUPLE_COST = 0.005  # Cost per index row processed
-    CPU_OPERATOR_COST = 0.0025    # Cost per operator evaluation
+    CPU_OPERATOR_COST = 0.0025  # Cost per operator evaluation
 
     @classmethod
     def explain_seq_scan_cost(cls, row_count: int, page_count: int) -> str:
@@ -182,7 +215,7 @@ class PlannerKnowledge:
             f"Index becomes preferred when: "
             f"(index pages + {cls.RANDOM_PAGE_COST}×heap pages) < {seq_cost:.0f}. "
             f"At {row_count:,} rows, selectivity threshold for index preference: "
-            f"~{min(100, 100 * 3 / max(1, row_count/8.0)):.1f}% of rows."
+            f"~{min(100, 100 * 3 / max(1, row_count / 8.0)):.1f}% of rows."
         )
 
     @classmethod
@@ -200,7 +233,10 @@ class PlannerKnowledge:
             return IndexType.GIN
 
         # Geometric types → GiST
-        if any(t in type_lower for t in ["geometry", "geography", "point", "box", "polygon"]):
+        if any(
+            t in type_lower
+            for t in ["geometry", "geography", "point", "box", "polygon"]
+        ):
             return IndexType.GIST
 
         # Range types → GiST or BRIN
@@ -208,7 +244,9 @@ class PlannerKnowledge:
             return IndexType.GIST
 
         # Monotonic append-only patterns → BRIN
-        if any(col in query_lower for col in ["created_at", "inserted_at", "timestamp"]):
+        if any(
+            col in query_lower for col in ["created_at", "inserted_at", "timestamp"]
+        ):
             return IndexType.BRIN
 
         # Pure equality on hash-able type → Hash (but usually B-tree is fine)

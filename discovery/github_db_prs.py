@@ -27,7 +27,6 @@ Usage:
 """
 
 import asyncio
-import hashlib
 import json
 import os
 import re
@@ -35,7 +34,6 @@ import time
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlencode
 
 import aiofiles
 import aiohttp
@@ -135,6 +133,7 @@ BEFORE_AFTER_PATTERN = re.compile(
 @dataclass
 class DiffHunk:
     """A single diff hunk from a PR."""
+
     filename: str
     patch: str
 
@@ -142,7 +141,10 @@ class DiffHunk:
 @dataclass
 class QueryPattern:
     """An extracted before/after query optimization pattern."""
-    pattern_type: str   # missing_index | n_plus_1 | query_rewrite | covering_index | etc.
+
+    pattern_type: (
+        str  # missing_index | n_plus_1 | query_rewrite | covering_index | etc.
+    )
     before_sql: str
     after_sql: str
     index_ddl: str
@@ -153,12 +155,13 @@ class QueryPattern:
 @dataclass
 class DBPullRequest:
     """A GitHub PR containing database query optimization."""
+
     repo: str
     pr_number: int
     pr_url: str
     title: str
     body: str
-    diff_hunks: list[dict]           # [{filename, patch}]
+    diff_hunks: list[dict]  # [{filename, patch}]
     migration_sql: list[str]
     explain_snippets: list[str]
     query_patterns: list[dict]
@@ -231,7 +234,7 @@ def _extract_query_patterns(body: str, diff_text: str) -> list[dict]:
         times_before = []
         times_after = []
         for m in EXECUTION_TIME_PATTERN.finditer(all_text):
-            context = all_text[max(0, m.start() - 100):m.start()].lower()
+            context = all_text[max(0, m.start() - 100) : m.start()].lower()
             val = float(m.group(1))
             if any(w in context for w in ["before", "slow", "was", "old"]):
                 times_before.append(val)
@@ -243,14 +246,16 @@ def _extract_query_patterns(body: str, diff_text: str) -> list[dict]:
             index_ddl = m.group(0)
             break
 
-        patterns.append({
-            "pattern_type": pattern_type,
-            "before_sql": before_sql,
-            "after_sql": after_sql,
-            "index_ddl": index_ddl,
-            "execution_time_before_ms": times_before[0] if times_before else None,
-            "execution_time_after_ms": times_after[0] if times_after else None,
-        })
+        patterns.append(
+            {
+                "pattern_type": pattern_type,
+                "before_sql": before_sql,
+                "after_sql": after_sql,
+                "index_ddl": index_ddl,
+                "execution_time_before_ms": times_before[0] if times_before else None,
+                "execution_time_after_ms": times_after[0] if times_after else None,
+            }
+        )
 
     return patterns[:5]
 
@@ -269,9 +274,19 @@ def score_relevance(
 
     # High-signal keywords
     high_signal = [
-        "seq scan", "index scan", "explain analyze", "execution time",
-        "query plan", "n+1", "missing index", "slow query", "query optimization",
-        "index concurrently", "rows removed", "nested loop", "hash join",
+        "seq scan",
+        "index scan",
+        "explain analyze",
+        "execution time",
+        "query plan",
+        "n+1",
+        "missing index",
+        "slow query",
+        "query optimization",
+        "index concurrently",
+        "rows removed",
+        "nested loop",
+        "hash join",
     ]
     hits = sum(1 for kw in high_signal if kw in text_lower)
     score += min(0.4, hits * 0.05)
@@ -314,7 +329,9 @@ class GitHubDBPRHarvester:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         raw_token = os.environ.get("GITHUB_TOKEN", "")
-        self.tokens = tokens or ([t for t in raw_token.split(",") if t] if raw_token else [])
+        self.tokens = tokens or (
+            [t for t in raw_token.split(",") if t] if raw_token else []
+        )
         self.workers = workers
         self.min_relevance = min_relevance
         self._semaphore = asyncio.Semaphore(workers)
@@ -351,9 +368,13 @@ class GitHubDBPRHarvester:
                     # Rate limit check
                     remaining = int(resp.headers.get("X-RateLimit-Remaining", 1))
                     if remaining < 5:
-                        reset_at = int(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
+                        reset_at = int(
+                            resp.headers.get("X-RateLimit-Reset", time.time() + 60)
+                        )
                         wait = max(1, reset_at - time.time() + 2)
-                        logger.warning(f"Rate limit low ({remaining}), sleeping {wait:.0f}s")
+                        logger.warning(
+                            f"Rate limit low ({remaining}), sleeping {wait:.0f}s"
+                        )
                         await asyncio.sleep(wait)
 
                     if resp.status == 200:
@@ -369,7 +390,7 @@ class GitHubDBPRHarvester:
                         await asyncio.sleep(5 * (attempt + 1))
             except Exception as e:
                 logger.debug(f"Request error ({url}): {e}")
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
         return None
 
     async def _search_prs(
@@ -385,7 +406,13 @@ class GitHubDBPRHarvester:
             data = await self._get(
                 session,
                 self.SEARCH_API,
-                params={"q": query, "per_page": per_page, "page": page, "sort": "created", "order": "desc"},
+                params={
+                    "q": query,
+                    "per_page": per_page,
+                    "page": page,
+                    "sort": "created",
+                    "order": "desc",
+                },
             )
             if not data or not isinstance(data, dict):
                 break
@@ -441,8 +468,17 @@ class GitHubDBPRHarvester:
 
             # Extract diff text from relevant file types
             db_file_extensions = {
-                ".py", ".rb", ".go", ".java", ".ts", ".js",
-                ".sql", ".migration", ".ex", ".cs", ".php",
+                ".py",
+                ".rb",
+                ".go",
+                ".java",
+                ".ts",
+                ".js",
+                ".sql",
+                ".migration",
+                ".ex",
+                ".cs",
+                ".php",
             }
             db_filename_patterns = re.compile(
                 r"(?:migration|migrate|model|schema|repository|repo|"
@@ -479,7 +515,9 @@ class GitHubDBPRHarvester:
             has_migration = bool(migration_sql)
             has_orm_fix = bool(ORM_N1_PATTERN.search(diff_text))
 
-            score = score_relevance(title, body, diff_text, has_explain, has_migration, has_orm_fix)
+            score = score_relevance(
+                title, body, diff_text, has_explain, has_migration, has_orm_fix
+            )
             if score < self.min_relevance:
                 return False
 
@@ -546,7 +584,9 @@ class GitHubDBPRHarvester:
         async with aiohttp.ClientSession(connector=connector) as session:
             total = 0
             for group_name, queries in SEARCH_QUERIES.items():
-                n = await self._harvest_query_group(session, group_name, queries, limit_per_group)
+                n = await self._harvest_query_group(
+                    session, group_name, queries, limit_per_group
+                )
                 total += n
                 logger.info(f"Group [{group_name}]: {n} PRs saved")
 
@@ -561,14 +601,20 @@ class GitHubDBPRHarvester:
 if __name__ == "__main__":
     import argparse
     from dotenv import load_dotenv
+
     load_dotenv()
 
     parser = argparse.ArgumentParser(description="Harvest GitHub DB optimization PRs")
     parser.add_argument("--all", action="store_true", help="Harvest all query groups")
-    parser.add_argument("--groups", nargs="+", choices=list(SEARCH_QUERIES.keys()),
-                        help="Specific query groups to harvest")
-    parser.add_argument("--limit", type=int, default=500,
-                        help="Max PRs per query group")
+    parser.add_argument(
+        "--groups",
+        nargs="+",
+        choices=list(SEARCH_QUERIES.keys()),
+        help="Specific query groups to harvest",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=500, help="Max PRs per query group"
+    )
     parser.add_argument("--output-dir", default=str(OUTPUT_DIR))
     parser.add_argument("--workers", type=int, default=5)
     parser.add_argument("--min-relevance", type=float, default=0.3)
@@ -578,7 +624,8 @@ if __name__ == "__main__":
         parser.error("Specify --all or --groups")
 
     active_queries = (
-        SEARCH_QUERIES if args.all
+        SEARCH_QUERIES
+        if args.all
         else {k: SEARCH_QUERIES[k] for k in args.groups if k in SEARCH_QUERIES}
     )
 
@@ -592,6 +639,7 @@ if __name__ == "__main__":
     # harvest_all() only iterates over the requested groups.
     if not args.all:
         import sys
+
         sys.modules[__name__].SEARCH_QUERIES = active_queries
 
     n = asyncio.run(harvester.harvest_all(limit_per_group=args.limit))

@@ -34,14 +34,15 @@ from agents.query_analyzer_agent import QueryDiagnosis
 @dataclass
 class RewriteResult:
     """Result of a query rewrite."""
+
     original_query: str
     rewritten_query: str
-    rewrite_type: str          # "not_exists", "union", "join", "sargable", "cte", "none"
-    plan_improvement: str      # Expected plan change
+    rewrite_type: str  # "not_exists", "union", "join", "sargable", "cte", "none"
+    plan_improvement: str  # Expected plan change
     semantics_preserved: bool  # Whether we're confident semantics match
     rationale: str
-    confidence: str            # "high" | "medium" | "low"
-    applied: bool              # Whether a rewrite was actually applied
+    confidence: str  # "high" | "medium" | "low"
+    applied: bool  # Whether a rewrite was actually applied
 
 
 REWRITE_SYSTEM = """You are QueryMedic's Query Rewriter — a SQL optimization expert.
@@ -93,7 +94,9 @@ Format:
 class RewriteAgent:
     def __init__(self, model: str = "claude-sonnet-4-6"):
         self.model = model
-        self.client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        self.client = anthropic.Anthropic(
+            api_key=os.environ.get("ANTHROPIC_API_KEY", "")
+        )
 
     def rewrite(
         self,
@@ -139,9 +142,15 @@ class RewriteAgent:
         return RewriteResult(
             original_query=query,
             rewritten_query=rewritten,
-            rewrite_type=self._extract_section(text, "rewrite type") or rewrite_type or "unknown",
-            plan_improvement=self._extract_section(text, "why this produces a better plan") or "",
-            semantics_preserved="equivalent" in text.lower() or "preserves" in text.lower(),
+            rewrite_type=self._extract_section(text, "rewrite type")
+            or rewrite_type
+            or "unknown",
+            plan_improvement=self._extract_section(
+                text, "why this produces a better plan"
+            )
+            or "",
+            semantics_preserved="equivalent" in text.lower()
+            or "preserves" in text.lower(),
             rationale=text,
             confidence=self._assess_confidence(rewrite_type, diagnosis),
             applied=applied,
@@ -168,7 +177,9 @@ class RewriteAgent:
         )
 
         if rewrite_type:
-            parts.append(f"## Detected Issue\nStructural issue detected: `{rewrite_type}`")
+            parts.append(
+                f"## Detected Issue\nStructural issue detected: `{rewrite_type}`"
+            )
 
         if diagnosis.row_estimation_error:
             parts.append(f"## Row Estimation Errors\n{diagnosis.row_estimation_error}")
@@ -216,7 +227,8 @@ class RewriteAgent:
         # Look for the rewritten query block specifically
         m = re.search(
             r"(?:rewritten query|after)[^\n]*\n```sql\n(.*?)```",
-            text, re.IGNORECASE | re.DOTALL
+            text,
+            re.IGNORECASE | re.DOTALL,
         )
         if m:
             return m.group(1).strip()
@@ -228,10 +240,19 @@ class RewriteAgent:
 
         return None
 
-    def _assess_confidence(self, rewrite_type: str | None, diagnosis: QueryDiagnosis) -> str:
+    def _assess_confidence(
+        self, rewrite_type: str | None, diagnosis: QueryDiagnosis
+    ) -> str:
         """Assess confidence in the rewrite."""
-        high_confidence_rewrites = {"not_in_subquery", "deep_offset_pagination", "non_sargable_date"}
-        medium_confidence_rewrites = {"or_multiple_columns", "correlated_subquery_in_select"}
+        high_confidence_rewrites = {
+            "not_in_subquery",
+            "deep_offset_pagination",
+            "non_sargable_date",
+        }
+        medium_confidence_rewrites = {
+            "or_multiple_columns",
+            "correlated_subquery_in_select",
+        }
 
         if rewrite_type in high_confidence_rewrites:
             return "high"
@@ -243,7 +264,8 @@ class RewriteAgent:
 
     def _extract_section(self, text: str, section: str) -> str | None:
         m = re.search(
-            rf"(?:#{1,3}\s*)?{re.escape(section)}[:\s]*(.*?)(?=\n#{1,3}|\Z)",
-            text, re.IGNORECASE | re.DOTALL
+            rf"(?:#{1, 3}\s*)?{re.escape(section)}[:\s]*(.*?)(?=\n#{1, 3}|\Z)",
+            text,
+            re.IGNORECASE | re.DOTALL,
         )
         return m.group(1).strip()[:500] if m else None

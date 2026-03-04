@@ -21,7 +21,6 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from statistics import mean, stdev
 
 from loguru import logger
 
@@ -29,12 +28,14 @@ try:
     import psycopg2
     import psycopg2.extras
     import psycopg2.sql
+
     HAS_PSYCOPG2 = True
 except ImportError:
     HAS_PSYCOPG2 = False
 
 try:
     import pymysql
+
     HAS_PYMYSQL = True
 except ImportError:
     HAS_PYMYSQL = False
@@ -43,6 +44,7 @@ except ImportError:
 @dataclass
 class TimingResult:
     """Raw timing data from EXPLAIN ANALYZE runs."""
+
     execution_time_ms: float
     planning_time_ms: float
     total_time_ms: float
@@ -55,6 +57,7 @@ class TimingResult:
 @dataclass
 class ValidationReport:
     """Complete validation report comparing before/after performance."""
+
     original_query: str
     optimized_query: str
     index_ddl_applied: list[str]
@@ -62,14 +65,14 @@ class ValidationReport:
     before_timing: TimingResult | None
     after_timing: TimingResult | None
 
-    improvement_factor: float     # before / after execution time (higher = better)
-    improvement_pct: float        # percentage improvement
-    verdict: str                  # "APPROVED" | "REJECTED" | "INCONCLUSIVE" | "ERROR"
+    improvement_factor: float  # before / after execution time (higher = better)
+    improvement_pct: float  # percentage improvement
+    verdict: str  # "APPROVED" | "REJECTED" | "INCONCLUSIVE" | "ERROR"
     verdict_reason: str
 
     before_plan_summary: str = ""
     after_plan_summary: str = ""
-    index_scan_appeared: bool = False   # Did the new index appear in the after-plan?
+    index_scan_appeared: bool = False  # Did the new index appear in the after-plan?
 
     timing_samples_before: list[float] = field(default_factory=list)
     timing_samples_after: list[float] = field(default_factory=list)
@@ -78,7 +81,9 @@ class ValidationReport:
     error: str | None = None
 
 
-MIN_IMPROVEMENT_PCT = float(os.environ.get("MIN_TIMING_IMPROVEMENT", "20"))  # 20% default
+MIN_IMPROVEMENT_PCT = float(
+    os.environ.get("MIN_TIMING_IMPROVEMENT", "20")
+)  # 20% default
 WARMUP_RUNS = 2
 MEASUREMENT_RUNS = 5
 
@@ -92,7 +97,9 @@ def _safe_table_name(table: str) -> str:
 
 class ValidationAgent:
     def __init__(self, db_url: str | None = None, engine: str = "postgresql"):
-        self.db_url = db_url or os.environ.get("POSTGRES_URL") or os.environ.get("MYSQL_URL")
+        self.db_url = (
+            db_url or os.environ.get("POSTGRES_URL") or os.environ.get("MYSQL_URL")
+        )
         self.engine = engine
 
     def validate(
@@ -125,11 +132,15 @@ class ValidationAgent:
             return self._dry_run_report(original_query, optimized_query, index_ddl)
 
         if eng == "postgresql":
-            return self._validate_postgres(original_query, optimized_query, index_ddl, url)
+            return self._validate_postgres(
+                original_query, optimized_query, index_ddl, url
+            )
         elif eng == "mysql":
             return self._validate_mysql(original_query, optimized_query, index_ddl, url)
         else:
-            return self._error_report(original_query, optimized_query, index_ddl, f"Unsupported engine: {eng}")
+            return self._error_report(
+                original_query, optimized_query, index_ddl, f"Unsupported engine: {eng}"
+            )
 
     # ─────────────────────────────────────────────────────────
     # PostgreSQL validation
@@ -143,7 +154,9 @@ class ValidationAgent:
         url: str,
     ) -> ValidationReport:
         if not HAS_PSYCOPG2:
-            return self._error_report(original_query, optimized_query, index_ddl, "psycopg2 not installed")
+            return self._error_report(
+                original_query, optimized_query, index_ddl, "psycopg2 not installed"
+            )
 
         try:
             conn = psycopg2.connect(url)
@@ -152,7 +165,9 @@ class ValidationAgent:
 
             # Step 1: Measure baseline
             logger.info("Measuring baseline performance...")
-            before = self._pg_time_query(cur, original_query, runs=MEASUREMENT_RUNS, warmup=WARMUP_RUNS)
+            before = self._pg_time_query(
+                cur, original_query, runs=MEASUREMENT_RUNS, warmup=WARMUP_RUNS
+            )
 
             # Step 2: Apply indexes
             applied_ddl = []
@@ -196,20 +211,31 @@ class ValidationAgent:
 
             # Step 4: Measure after
             logger.info("Measuring post-optimization performance...")
-            after = self._pg_time_query(cur, optimized_query, runs=MEASUREMENT_RUNS, warmup=WARMUP_RUNS)
+            after = self._pg_time_query(
+                cur, optimized_query, runs=MEASUREMENT_RUNS, warmup=WARMUP_RUNS
+            )
 
             cur.close()
             conn.close()
 
             return self._build_report(
-                original_query, optimized_query, applied_ddl, before, after, "postgresql"
+                original_query,
+                optimized_query,
+                applied_ddl,
+                before,
+                after,
+                "postgresql",
             )
 
         except Exception as e:
             logger.error(f"PostgreSQL validation error: {e}")
-            return self._error_report(original_query, optimized_query, index_ddl, str(e))
+            return self._error_report(
+                original_query, optimized_query, index_ddl, str(e)
+            )
 
-    def _pg_time_query(self, cur, query: str, runs: int = 5, warmup: int = 2) -> TimingResult:
+    def _pg_time_query(
+        self, cur, query: str, runs: int = 5, warmup: int = 2
+    ) -> TimingResult:
         """Run EXPLAIN (ANALYZE, BUFFERS) and collect timing across multiple runs."""
         explain_query = f"EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) {query}"
         times = []
@@ -280,7 +306,9 @@ class ValidationAgent:
         url: str,
     ) -> ValidationReport:
         if not HAS_PYMYSQL:
-            return self._error_report(original_query, optimized_query, index_ddl, "pymysql not installed")
+            return self._error_report(
+                original_query, optimized_query, index_ddl, "pymysql not installed"
+            )
 
         try:
             conn = pymysql.connect(
@@ -317,7 +345,9 @@ class ValidationAgent:
             )
 
         except Exception as e:
-            return self._error_report(original_query, optimized_query, index_ddl, str(e))
+            return self._error_report(
+                original_query, optimized_query, index_ddl, str(e)
+            )
 
     def _mysql_time_query(self, cur, query: str) -> TimingResult:
         """Time a MySQL query using EXPLAIN ANALYZE (MySQL 8.0+)."""
@@ -361,8 +391,13 @@ class ValidationAgent:
         engine: str,
     ) -> ValidationReport:
         """Build the final ValidationReport with verdict."""
-        improvement_factor = before.execution_time_ms / max(after.execution_time_ms, 0.001)
-        improvement_pct = ((before.execution_time_ms - after.execution_time_ms) / max(before.execution_time_ms, 0.001)) * 100
+        improvement_factor = before.execution_time_ms / max(
+            after.execution_time_ms, 0.001
+        )
+        improvement_pct = (
+            (before.execution_time_ms - after.execution_time_ms)
+            / max(before.execution_time_ms, 0.001)
+        ) * 100
 
         # Check if new index appeared in plan
         index_scan_appeared = False
@@ -467,11 +502,19 @@ class ValidationAgent:
         """Extract table names from FROM and JOIN clauses."""
         q = re.sub(r"--.*$", "", query, flags=re.MULTILINE)
         tables = re.findall(
-            r"\b(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_.]*)\b",
-            q, re.IGNORECASE
+            r"\b(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_.]*)\b", q, re.IGNORECASE
         )
         # Filter out subquery aliases and SQL keywords
-        sql_keywords = {"select", "where", "group", "order", "having", "union", "intersect", "except"}
+        sql_keywords = {
+            "select",
+            "where",
+            "group",
+            "order",
+            "having",
+            "union",
+            "intersect",
+            "except",
+        }
         return list({t.lower() for t in tables if t.lower() not in sql_keywords})
 
     # ─────────────────────────────────────────────────────────

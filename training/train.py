@@ -103,7 +103,9 @@ def load_training_data(data_dir: Path) -> Dataset:
                     records.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
-        logger.info(f"Loaded {len(records)} training pairs from {len(jsonl_files)} files in {data_dir}")
+        logger.info(
+            f"Loaded {len(records)} training pairs from {len(jsonl_files)} files in {data_dir}"
+        )
 
     return Dataset.from_list(records)
 
@@ -120,7 +122,9 @@ def prepare_dataset(data_dir: Path, tokenizer) -> Dataset:
             role_map = {"system": "system", "human": "user", "gpt": "assistant"}
             role = role_map.get(turn["from"], turn["from"])
             msgs.append({"role": role, "content": turn["value"]})
-        text = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
+        text = tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=False
+        )
         return {"text": text}
 
     ds = ds.map(format_example, remove_columns=ds.column_names)
@@ -132,7 +136,9 @@ def prepare_dataset(data_dir: Path, tokenizer) -> Dataset:
 
     before = len(ds)
     ds = ds.filter(filter_length)
-    logger.info(f"Filtered {before - len(ds)} examples exceeding {MAX_SEQ_LEN} tokens. Remaining: {len(ds):,}")
+    logger.info(
+        f"Filtered {before - len(ds)} examples exceeding {MAX_SEQ_LEN} tokens. Remaining: {len(ds):,}"
+    )
 
     return ds
 
@@ -144,12 +150,22 @@ def build_lora_config() -> LoraConfig:
         lora_alpha=128,
         lora_dropout=0.05,
         bias="none",
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
         modules_to_save=["embed_tokens", "lm_head"],
     )
 
 
-def build_training_args(output_dir: Path, num_gpus: int, deepspeed_config: str | None) -> SFTConfig:
+def build_training_args(
+    output_dir: Path, num_gpus: int, deepspeed_config: str | None
+) -> SFTConfig:
     return SFTConfig(
         output_dir=str(output_dir),
         num_train_epochs=3,
@@ -190,7 +206,9 @@ def build_training_args(output_dir: Path, num_gpus: int, deepspeed_config: str |
 class LogMetricsCallback(TrainerCallback):
     """Log training metrics to loguru."""
 
-    def on_log(self, args, state: TrainerState, control: TrainerControl, logs=None, **kwargs):
+    def on_log(
+        self, args, state: TrainerState, control: TrainerControl, logs=None, **kwargs
+    ):
         if logs:
             step = state.global_step
             loss = logs.get("loss", "N/A")
@@ -239,7 +257,9 @@ def main():
     val_ds = None
     val_path = args.data_dir / "sharegpt_val.jsonl"
     if val_path.exists():
-        val_records = [json.loads(l) for l in val_path.read_text().splitlines() if l.strip()]
+        val_records = [
+            json.loads(l) for l in val_path.read_text().splitlines() if l.strip()
+        ]
         if val_records:
 
             def format_val(ex):
@@ -249,10 +269,13 @@ def main():
                     role_map = {"system": "system", "human": "user", "gpt": "assistant"}
                     role = role_map.get(turn["from"], turn["from"])
                     msgs.append({"role": role, "content": turn["value"]})
-                text = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
+                text = tokenizer.apply_chat_template(
+                    msgs, tokenize=False, add_generation_prompt=False
+                )
                 return {"text": text}
 
             from datasets import Dataset as HFDataset
+
             val_ds_raw = HFDataset.from_list(val_records)
             val_ds = val_ds_raw.map(format_val, remove_columns=val_ds_raw.column_names)
             logger.info(f"Loaded {len(val_ds):,} validation examples")

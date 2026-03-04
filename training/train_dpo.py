@@ -29,7 +29,7 @@ import torch
 from datasets import Dataset, load_dataset
 from loguru import logger
 from peft import PeftModel
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import DPOTrainer, DPOConfig
 
 BASE_MODEL_DEFAULT = os.environ.get("BASE_MODEL", "Qwen/Qwen2.5-7B-Coder-Instruct")
@@ -52,7 +52,9 @@ def prepare_dpo_dataset(data_path: str, tokenizer) -> Dataset:
     logger.info(f"Loaded {len(ds):,} preference pairs")
 
     def format_pair(ex):
-        system = ex.get("system", "You are QueryMedic — a database query optimization specialist.")
+        system = ex.get(
+            "system", "You are QueryMedic — a database query optimization specialist."
+        )
 
         def make_messages(response: str) -> list[dict]:
             return [
@@ -69,7 +71,8 @@ def prepare_dpo_dataset(data_path: str, tokenizer) -> Dataset:
         )
         prompt_text = tokenizer.apply_chat_template(
             make_messages("")[:-1],  # Remove empty assistant turn
-            tokenize=False, add_generation_prompt=True
+            tokenize=False,
+            add_generation_prompt=True,
         )
 
         return {
@@ -88,15 +91,23 @@ def prepare_dpo_dataset(data_path: str, tokenizer) -> Dataset:
 
     before = len(ds)
     ds = ds.filter(filter_length)
-    logger.info(f"Filtered {before - len(ds)} pairs exceeding max length. Remaining: {len(ds):,}")
+    logger.info(
+        f"Filtered {before - len(ds)} pairs exceeding max length. Remaining: {len(ds):,}"
+    )
 
     return ds
 
 
 def main():
     parser = argparse.ArgumentParser(description="QueryMedic DPO Training")
-    parser.add_argument("--rl_checkpoint", required=True, help="Path to GRPO RL PEFT checkpoint")
-    parser.add_argument("--base_model", default=None, help="Base model name/path (read from adapter_config.json if omitted)")
+    parser.add_argument(
+        "--rl_checkpoint", required=True, help="Path to GRPO RL PEFT checkpoint"
+    )
+    parser.add_argument(
+        "--base_model",
+        default=None,
+        help="Base model name/path (read from adapter_config.json if omitted)",
+    )
     parser.add_argument("--data_path", required=True)
     parser.add_argument("--output_dir", default="checkpoints/querymedic-dpo-v1")
     parser.add_argument("--run_name", default="querymedic-dpo-v1")
@@ -108,20 +119,30 @@ def main():
         adapter_config_path = Path(args.rl_checkpoint) / "adapter_config.json"
         if adapter_config_path.exists():
             adapter_cfg = json.loads(adapter_config_path.read_text())
-            base_model_name = adapter_cfg.get("base_model_name_or_path", BASE_MODEL_DEFAULT)
-            logger.info(f"Resolved base model from adapter_config.json: {base_model_name}")
+            base_model_name = adapter_cfg.get(
+                "base_model_name_or_path", BASE_MODEL_DEFAULT
+            )
+            logger.info(
+                f"Resolved base model from adapter_config.json: {base_model_name}"
+            )
         else:
             base_model_name = BASE_MODEL_DEFAULT
-            logger.warning(f"No adapter_config.json found; falling back to default base model: {base_model_name}")
+            logger.warning(
+                f"No adapter_config.json found; falling back to default base model: {base_model_name}"
+            )
 
-    tokenizer = AutoTokenizer.from_pretrained(args.rl_checkpoint, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.rl_checkpoint, trust_remote_code=True
+    )
     tokenizer.pad_token = tokenizer.eos_token
     # QM-2: DPO requires right-padding so that label positions align with
     # the assistant response tokens. Left-padding shifts all token positions
     # and causes the loss to be computed on the wrong tokens.
     tokenizer.padding_side = "right"
 
-    logger.info(f"Loading RL checkpoint (PEFT): {args.rl_checkpoint} on base {base_model_name}")
+    logger.info(
+        f"Loading RL checkpoint (PEFT): {args.rl_checkpoint} on base {base_model_name}"
+    )
     _base = AutoModelForCausalLM.from_pretrained(
         base_model_name,
         torch_dtype=torch.bfloat16,
@@ -157,8 +178,8 @@ def main():
         report_to=["wandb"] if os.environ.get("WANDB_API_KEY") else [],
         deepspeed=str(Path(__file__).parent / "configs/ds_config.json"),
         # DPO-specific
-        beta=0.1,                       # KL penalty strength (lower = more divergence allowed)
-        loss_type="sigmoid",            # Standard DPO loss
+        beta=0.1,  # KL penalty strength (lower = more divergence allowed)
+        loss_type="sigmoid",  # Standard DPO loss
         max_length=MAX_SEQ_LEN,
         max_prompt_length=MAX_SEQ_LEN // 2,
         label_smoothing=0.0,

@@ -43,6 +43,7 @@ class PlanNodeType(Enum):
 @dataclass
 class PlanNode:
     """A single node in an EXPLAIN plan."""
+
     node_type: str
     relation: str | None = None
     index_name: str | None = None
@@ -86,6 +87,7 @@ class PlanNode:
 @dataclass
 class ExplainPlan:
     """Structured representation of an EXPLAIN ANALYZE plan."""
+
     engine: str
     root_node: PlanNode | None = None
     all_nodes: list[PlanNode] = field(default_factory=list)
@@ -131,7 +133,9 @@ class ExplainPlan:
         for node in self.all_nodes:
             if node.is_estimation_error and node.relation:
                 ratio = node.row_estimation_ratio or 0.0
-                errors.append((node.relation, node.estimated_rows, node.actual_rows, ratio))
+                errors.append(
+                    (node.relation, node.estimated_rows, node.actual_rows, ratio)
+                )
         return errors
 
     @property
@@ -277,9 +281,15 @@ class ExplainPlanParser:
 def detect_engine(text: str) -> str:
     """Auto-detect database engine from EXPLAIN output."""
     text_lower = text.lower()
-    if any(kw in text_lower for kw in ["planning time:", "seq scan", "index only scan", "bitmap"]):
+    if any(
+        kw in text_lower
+        for kw in ["planning time:", "seq scan", "index only scan", "bitmap"]
+    ):
         return "postgresql"
-    if any(kw in text_lower for kw in ["using filesort", "using temporary", "using index condition"]):
+    if any(
+        kw in text_lower
+        for kw in ["using filesort", "using temporary", "using index condition"]
+    ):
         return "mysql"
     if "sqlite_stat" in text_lower or "search table" in text_lower:
         return "sqlite"

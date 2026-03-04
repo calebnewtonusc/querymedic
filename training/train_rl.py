@@ -22,7 +22,6 @@ Usage:
 """
 
 import argparse
-import math
 import os
 import re
 from pathlib import Path
@@ -30,7 +29,7 @@ from pathlib import Path
 import torch
 from datasets import Dataset, load_dataset
 from loguru import logger
-from peft import LoraConfig, PeftModel, TaskType
+from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 
@@ -45,7 +44,7 @@ INDEX_TYPE_WEIGHT = 0.25
 WRITE_AMP_WEIGHT = 0.15
 REWRITE_WEIGHT = 0.10
 
-MAX_IMPROVEMENT_FACTOR = 10.0   # Cap reward at 10x speedup
+MAX_IMPROVEMENT_FACTOR = 10.0  # Cap reward at 10x speedup
 
 
 def compute_timing_reward(response: str, scenario: dict) -> float:
@@ -102,7 +101,11 @@ def compute_write_amplification_reward(response: str, scenario: dict) -> float:
     Check whether write amplification was quantified and approximately correct.
     """
     # Check if write amplification was mentioned at all
-    mentioned = bool(re.search(r"write\s+(amplification|overhead|cost|impact)", response, re.IGNORECASE))
+    mentioned = bool(
+        re.search(
+            r"write\s+(amplification|overhead|cost|impact)", response, re.IGNORECASE
+        )
+    )
     if not mentioned:
         return 0.0
 
@@ -161,7 +164,9 @@ def _score_single_completion(completion: str, prompt: str, scenario: dict) -> fl
     return total
 
 
-def reward_function(completions: list[str], prompts: list[str], **kwargs) -> list[float]:
+def reward_function(
+    completions: list[str], prompts: list[str], **kwargs
+) -> list[float]:
     """
     GRPO reward function — evaluates each completion against the scenario.
 
@@ -172,7 +177,9 @@ def reward_function(completions: list[str], prompts: list[str], **kwargs) -> lis
     rewards = []
     scenarios_raw = kwargs.get("scenarios", [{}] * len(completions))
     if len(scenarios_raw) < len(completions):
-        scenarios_raw = list(scenarios_raw) + [{}] * (len(completions) - len(scenarios_raw))
+        scenarios_raw = list(scenarios_raw) + [{}] * (
+            len(completions) - len(scenarios_raw)
+        )
 
     for completion, prompt, scenario in zip(completions, prompts, scenarios_raw):
         reward = _score_single_completion(completion, prompt, scenario)
@@ -184,6 +191,7 @@ def reward_function(completions: list[str], prompts: list[str], **kwargs) -> lis
 # ─────────────────────────────────────────────────────────────
 # Dataset
 # ─────────────────────────────────────────────────────────────
+
 
 def prepare_rl_dataset(data_path: str, tokenizer) -> Dataset:
     """
@@ -223,10 +231,12 @@ def prepare_rl_dataset(data_path: str, tokenizer) -> Dataset:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
-        text = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+        text = tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=True
+        )
         return {
             "query": text,
-            "scenarios": ex,   # Pass full scenario for reward function
+            "scenarios": ex,  # Pass full scenario for reward function
         }
 
     ds = ds.map(format_prompt)
@@ -237,6 +247,7 @@ def prepare_rl_dataset(data_path: str, tokenizer) -> Dataset:
 # Main
 # ─────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(description="QueryMedic GRPO RL Training")
     parser.add_argument("--sft_checkpoint", required=True)
@@ -245,13 +256,17 @@ def main():
     parser.add_argument("--run_name", default="querymedic-rl-v1")
     args = parser.parse_args()
 
-    tokenizer = AutoTokenizer.from_pretrained(args.sft_checkpoint, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.sft_checkpoint, trust_remote_code=True
+    )
     tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "left"   # Left padding for generation
+    tokenizer.padding_side = "left"  # Left padding for generation
 
     logger.info(f"Loading SFT checkpoint: {args.sft_checkpoint}")
     base_model = AutoModelForCausalLM.from_pretrained(
-        tokenizer.name_or_path if hasattr(tokenizer, "name_or_path") else args.sft_checkpoint,
+        tokenizer.name_or_path
+        if hasattr(tokenizer, "name_or_path")
+        else args.sft_checkpoint,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
         attn_implementation="flash_attention_2",
@@ -280,7 +295,7 @@ def main():
         # (e.g. deepspeed --num_gpus 14 training/train_rl.py launches from repo root).
         deepspeed=str(Path(__file__).parent / "configs" / "ds_config_rl.json"),
         # GRPO-specific
-        num_generations=8,           # Generate 8 completions per prompt, pick best
+        num_generations=8,  # Generate 8 completions per prompt, pick best
         max_completion_length=2048,
         temperature=0.9,
         top_p=0.95,

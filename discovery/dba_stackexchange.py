@@ -54,6 +54,7 @@ class DBAStackExchangeHarvester:
     def _api_get(self, endpoint: str, params: dict) -> dict:
         """Make API request to Stack Exchange."""
         import os
+
         if not self.api_key:
             self.api_key = os.environ.get("STACKOVERFLOW_KEY")
         if self.api_key:
@@ -62,7 +63,9 @@ class DBAStackExchangeHarvester:
 
         time.sleep(0.15 if self.api_key else 0.5)
 
-        resp = self.session.get(f"{STACKOVERFLOW_API}/{endpoint}", params=params, timeout=30)
+        resp = self.session.get(
+            f"{STACKOVERFLOW_API}/{endpoint}", params=params, timeout=30
+        )
         resp.raise_for_status()
         data = resp.json()
         self.quota_remaining = data.get("quota_remaining", self.quota_remaining)
@@ -73,12 +76,31 @@ class DBAStackExchangeHarvester:
     def _is_db_optimization(self, text: str) -> bool:
         """Filter for database optimization content."""
         keywords = [
-            "explain", "seq scan", "index scan", "query plan", "execution plan",
-            "create index", "partial index", "covering index", "gin", "gist",
-            "btree", "hash index", "brin", "statistics", "analyze",
-            "write amplification", "heap fetch", "index only scan",
-            "query rewrite", "cte", "lateral", "anti-join",
-            "row estimate", "planner", "optimizer",
+            "explain",
+            "seq scan",
+            "index scan",
+            "query plan",
+            "execution plan",
+            "create index",
+            "partial index",
+            "covering index",
+            "gin",
+            "gist",
+            "btree",
+            "hash index",
+            "brin",
+            "statistics",
+            "analyze",
+            "write amplification",
+            "heap fetch",
+            "index only scan",
+            "query rewrite",
+            "cte",
+            "lateral",
+            "anti-join",
+            "row estimate",
+            "planner",
+            "optimizer",
         ]
         text_lower = text.lower()
         return sum(1 for kw in keywords if kw in text_lower) >= 2
@@ -96,14 +118,17 @@ class DBAStackExchangeHarvester:
         logger.info(f"Harvesting {len(tag_combos)} DBA tag combinations")
 
         for i, tag in enumerate(tag_combos, 1):
-            data = self._api_get("questions", {
-                "tagged": tag,
-                "sort": "votes",
-                "order": "desc",
-                "filter": "withbody",
-                "pagesize": 100,
-                "min": min_score,
-            })
+            data = self._api_get(
+                "questions",
+                {
+                    "tagged": tag,
+                    "sort": "votes",
+                    "order": "desc",
+                    "filter": "withbody",
+                    "pagesize": 100,
+                    "min": min_score,
+                },
+            )
 
             for q in data.get("items", []):
                 qid = q["question_id"]
@@ -116,16 +141,21 @@ class DBAStackExchangeHarvester:
                     continue
 
                 # Fetch answers
-                ans_data = self._api_get(f"questions/{qid}/answers", {
-                    "sort": "votes",
-                    "order": "desc",
-                    "filter": "withbody",
-                    "pagesize": 5,
-                    "min": 5,
-                })
+                ans_data = self._api_get(
+                    f"questions/{qid}/answers",
+                    {
+                        "sort": "votes",
+                        "order": "desc",
+                        "filter": "withbody",
+                        "pagesize": 5,
+                        "min": 5,
+                    },
+                )
                 answers = ans_data.get("items", [])
 
-                combined = q.get("body", "") + " ".join(a.get("body", "") for a in answers)
+                combined = q.get("body", "") + " ".join(
+                    a.get("body", "") for a in answers
+                )
                 if not self._is_db_optimization(combined):
                     continue
 
@@ -174,7 +204,9 @@ class DBAStackExchangeHarvester:
 
 
 if __name__ == "__main__":
-    import argparse, os
+    import argparse
+    import os
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--min-votes", type=int, default=10)
     args = parser.parse_args()
