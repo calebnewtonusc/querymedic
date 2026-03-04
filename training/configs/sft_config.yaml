@@ -24,8 +24,8 @@ lora:
   task_type: "CAUSAL_LM"
 
 data:
-  train_path: "data/training/train.jsonl"
-  eval_path: "data/training/eval.jsonl"
+  train_path: "data/training/sharegpt_train.jsonl"
+  eval_path: "data/training/sharegpt_val.jsonl"
   max_seq_length: 8192
   dataset_text_field: "text"
 
@@ -50,7 +50,7 @@ training:
   save_steps: 200
   save_total_limit: 3
   logging_steps: 10
-  report_to: "wandb"
+  report_to: "none"
   deepspeed: "training/configs/deepspeed_zero3.json"
 
 wandb:

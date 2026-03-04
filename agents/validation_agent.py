@@ -83,6 +83,13 @@ WARMUP_RUNS = 2
 MEASUREMENT_RUNS = 5
 
 
+def _safe_table_name(table: str) -> str:
+    """Validate a table name before interpolating into SQL to prevent injection."""
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", table):
+        raise ValueError(f"Unsafe table name: {table!r}")
+    return table
+
+
 class ValidationAgent:
     def __init__(self, db_url: str | None = None, engine: str = "postgresql"):
         self.db_url = db_url or os.environ.get("POSTGRES_URL") or os.environ.get("MYSQL_URL")
@@ -296,7 +303,7 @@ class ValidationAgent:
             tables = self._extract_tables_from_query(optimized_query)
             for table in tables:
                 try:
-                    cur.execute(f"ANALYZE TABLE `{table}`")
+                    cur.execute(f"ANALYZE TABLE `{_safe_table_name(table)}`")
                 except Exception:
                     pass
 

@@ -33,7 +33,7 @@ training:
   optim: "rmsprop"
   logging_steps: 10
   save_steps: 100
-  report_to: "wandb"
+  report_to: "none"
 
 wandb:
   project: "querymedic-dpo"

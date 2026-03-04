@@ -34,10 +34,9 @@ echo "  Synthesis complete"
 # ── Step 4: Stage 1 — SFT training ───────────────────────────
 echo "[4/6] Stage 1: SFT training..."
 deepspeed --num_gpus 18 training/train.py \
-    --data_path "${DATA_DIR}/sft/train.jsonl" \
-    --eval_path "${DATA_DIR}/sft/eval.jsonl" \
-    --output_dir "${CHECKPOINT_DIR}/sft" \
-    --run_name "${RUN_NAME}-sft"
+    --deepspeed training/configs/deepspeed_zero3.json \
+    --data-dir "${DATA_DIR}" \
+    --output-dir "${CHECKPOINT_DIR}/sft"
 
 echo "  SFT checkpoint: ${CHECKPOINT_DIR}/sft/final"
 

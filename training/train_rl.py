@@ -139,60 +139,44 @@ def compute_rewrite_reward(response: str, scenario: dict) -> float:
     return 0.5
 
 
-def reward_function(completions: list[list[str]], prompts: list[str], **kwargs) -> list[float]:
+def _score_single_completion(completion: str, prompt: str, scenario: dict) -> float:
+    """Score a single completion against its scenario."""
+    timing_r = compute_timing_reward(completion, scenario)
+    index_type_r = compute_index_type_reward(completion, scenario)
+    write_amp_r = compute_write_amplification_reward(completion, scenario)
+    rewrite_r = compute_rewrite_reward(completion, scenario)
+
+    total = (
+        TIMING_WEIGHT * timing_r
+        + INDEX_TYPE_WEIGHT * index_type_r
+        + WRITE_AMP_WEIGHT * write_amp_r
+        + REWRITE_WEIGHT * rewrite_r
+    )
+
+    logger.debug(
+        f"Reward: {total:.3f} "
+        f"(timing={timing_r:.2f}, idx_type={index_type_r:.2f}, "
+        f"wa={write_amp_r:.2f}, rewrite={rewrite_r:.2f})"
+    )
+    return total
+
+
+def reward_function(completions: list[str], prompts: list[str], **kwargs) -> list[float]:
     """
     GRPO reward function — evaluates each completion against the scenario.
 
-    GRPOTrainer calls this with completions shaped as list[list[str]]:
-      - outer list length = num_prompts
-      - inner list length = num_generations per prompt
-    We must return a flat list of length num_prompts * num_generations,
-    one reward value per individual completion.
-
-    kwargs contains scenario metadata passed through from the dataset.
+    TRL passes completions as a flat list[str], one entry per generated
+    completion (num_prompts * num_generations total). prompts is also flat
+    with the same length. kwargs contains scenario metadata from the dataset.
     """
     rewards = []
-    num_prompts = len(completions)
-    # Flatten completions: each inner list is the group of generations for one prompt
-    flat_completions = [c for group in completions for c in group]
-    total_completions = len(flat_completions)
+    scenarios_raw = kwargs.get("scenarios", [{}] * len(completions))
+    if len(scenarios_raw) < len(completions):
+        scenarios_raw = list(scenarios_raw) + [{}] * (len(completions) - len(scenarios_raw))
 
-    scenarios_raw = kwargs.get("scenarios", [])
-    if not scenarios_raw:
-        scenarios_raw = [{}] * num_prompts
-
-    # Expand scenarios to match num_generations per prompt so that
-    # flat index i maps to scenario scenarios_raw[i // num_gen].
-    num_gen = total_completions // max(num_prompts, 1)
-    scenarios = []
-    for s in scenarios_raw:
-        scenarios.extend([s] * num_gen)
-    # Trim/pad to exact flat length in case of rounding
-    if len(scenarios) < total_completions:
-        scenarios.extend([{}] * (total_completions - len(scenarios)))
-    scenarios = scenarios[:total_completions]
-
-    for idx, completion in enumerate(flat_completions):
-        scenario = scenarios[idx] if idx < len(scenarios) else {}
-        timing_r = compute_timing_reward(completion, scenario)
-        index_type_r = compute_index_type_reward(completion, scenario)
-        write_amp_r = compute_write_amplification_reward(completion, scenario)
-        rewrite_r = compute_rewrite_reward(completion, scenario)
-
-        total = (
-            TIMING_WEIGHT * timing_r
-            + INDEX_TYPE_WEIGHT * index_type_r
-            + WRITE_AMP_WEIGHT * write_amp_r
-            + REWRITE_WEIGHT * rewrite_r
-        )
-
-        rewards.append(total)
-
-        logger.debug(
-            f"Reward: {total:.3f} "
-            f"(timing={timing_r:.2f}, idx_type={index_type_r:.2f}, "
-            f"wa={write_amp_r:.2f}, rewrite={rewrite_r:.2f})"
-        )
+    for completion, prompt, scenario in zip(completions, prompts, scenarios_raw):
+        reward = _score_single_completion(completion, prompt, scenario)
+        rewards.append(reward)
 
     return rewards
 
@@ -273,6 +257,7 @@ def main():
         attn_implementation="flash_attention_2",
     )
     model = PeftModel.from_pretrained(base_model, args.sft_checkpoint)
+    model.enable_input_require_grads()
 
     train_ds = prepare_rl_dataset(args.data_path, tokenizer)
 
@@ -289,7 +274,7 @@ def main():
         bf16=True,
         logging_steps=5,
         save_steps=100,
-        report_to=["wandb"] if os.environ.get("WANDB_API_KEY") else ["none"],
+        report_to=["wandb"] if os.environ.get("WANDB_API_KEY") else [],
         # QM-6: Use an absolute path so DeepSpeed can find the config file
         # regardless of the working directory from which the script is launched
         # (e.g. deepspeed --num_gpus 14 training/train_rl.py launches from repo root).

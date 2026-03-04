@@ -21,12 +21,14 @@ Usage:
 """
 
 import argparse
+import json
 import os
 from pathlib import Path
 
 import torch
 from datasets import Dataset, load_dataset
 from loguru import logger
+from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
 from trl import DPOTrainer, DPOConfig
 
@@ -93,11 +95,24 @@ def prepare_dpo_dataset(data_path: str, tokenizer) -> Dataset:
 
 def main():
     parser = argparse.ArgumentParser(description="QueryMedic DPO Training")
-    parser.add_argument("--rl_checkpoint", required=True, help="Path to GRPO RL checkpoint")
+    parser.add_argument("--rl_checkpoint", required=True, help="Path to GRPO RL PEFT checkpoint")
+    parser.add_argument("--base_model", default=None, help="Base model name/path (read from adapter_config.json if omitted)")
     parser.add_argument("--data_path", required=True)
     parser.add_argument("--output_dir", default="checkpoints/querymedic-dpo-v1")
     parser.add_argument("--run_name", default="querymedic-dpo-v1")
     args = parser.parse_args()
+
+    # Resolve the base model: prefer explicit arg, then read from adapter_config.json
+    base_model_name = args.base_model
+    if not base_model_name:
+        adapter_config_path = Path(args.rl_checkpoint) / "adapter_config.json"
+        if adapter_config_path.exists():
+            adapter_cfg = json.loads(adapter_config_path.read_text())
+            base_model_name = adapter_cfg.get("base_model_name_or_path", BASE_MODEL_DEFAULT)
+            logger.info(f"Resolved base model from adapter_config.json: {base_model_name}")
+        else:
+            base_model_name = BASE_MODEL_DEFAULT
+            logger.warning(f"No adapter_config.json found; falling back to default base model: {base_model_name}")
 
     tokenizer = AutoTokenizer.from_pretrained(args.rl_checkpoint, trust_remote_code=True)
     tokenizer.pad_token = tokenizer.eos_token
@@ -106,22 +121,26 @@ def main():
     # and causes the loss to be computed on the wrong tokens.
     tokenizer.padding_side = "right"
 
-    logger.info(f"Loading RL checkpoint: {args.rl_checkpoint}")
-    model = AutoModelForCausalLM.from_pretrained(
-        args.rl_checkpoint,
+    logger.info(f"Loading RL checkpoint (PEFT): {args.rl_checkpoint} on base {base_model_name}")
+    _base = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
         attn_implementation="flash_attention_2",
+        use_cache=False,
     )
+    model = PeftModel.from_pretrained(_base, args.rl_checkpoint)
 
     # Frozen reference model — stays at RL checkpoint weights
     logger.info("Loading frozen reference model...")
-    ref_model = AutoModelForCausalLM.from_pretrained(
-        args.rl_checkpoint,
+    _ref_base = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
         attn_implementation="flash_attention_2",
+        use_cache=False,
     )
+    ref_model = PeftModel.from_pretrained(_ref_base, args.rl_checkpoint)
 
     train_ds = prepare_dpo_dataset(args.data_path, tokenizer)
 
@@ -135,7 +154,7 @@ def main():
         bf16=True,
         logging_steps=5,
         save_steps=100,
-        report_to=["wandb"] if os.environ.get("WANDB_API_KEY") else ["none"],
+        report_to=["wandb"] if os.environ.get("WANDB_API_KEY") else [],
         deepspeed=str(Path(__file__).parent / "configs/ds_config.json"),
         # DPO-specific
         beta=0.1,                       # KL penalty strength (lower = more divergence allowed)

@@ -174,7 +174,7 @@ def build_training_args(output_dir: Path, num_gpus: int, deepspeed_config: str |
         eval_steps=200,
         save_steps=500,
         save_total_limit=3,
-        report_to=["wandb"] if os.environ.get("WANDB_API_KEY") else ["none"],
+        report_to=["wandb"] if os.environ.get("WANDB_API_KEY") else [],
         run_name="querymedic-sft",
         deepspeed=deepspeed_config,
         dataloader_num_workers=4,
@@ -230,6 +230,7 @@ def main():
 
     lora_config = build_lora_config()
     model = get_peft_model(model, lora_config)
+    model.enable_input_require_grads()
     model.print_trainable_parameters()
 
     train_ds = prepare_dataset(args.data_dir, tokenizer)
